@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="magenta">#FF09FF</color>
+    <color name="player">#FF0000</color>
+    <color name="enemy">#00FFFF</color>
+    <color name="spell">#FF9400</color>
+    <color name="healthBarBorder">#A0A0A0</color>
+    <color name="healthBarHealth">#00FF00</color>
+    <color name="gameOver">#FC5245</color>
+</resources>
