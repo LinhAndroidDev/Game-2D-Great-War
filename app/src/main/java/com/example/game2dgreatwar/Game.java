@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.media.MediaPlayer;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -14,6 +15,7 @@ import androidx.annotation.NonNull;
 
 import com.example.game2dgreatwar.gameobject.Circle;
 import com.example.game2dgreatwar.gameobject.Enemy;
+import com.example.game2dgreatwar.gameobject.Health;
 import com.example.game2dgreatwar.gameobject.Player;
 import com.example.game2dgreatwar.gameobject.Spell;
 import com.example.game2dgreatwar.gamepanel.Joystick;
@@ -39,11 +41,13 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
     private GameLoop gameLoop;
     private final List<Enemy> enemyList = new ArrayList<>();
     private final List<Spell> spellList = new ArrayList<>();
+    private final List<Health> healthList = new ArrayList<>();
     private int numberOfSpellsToCast = 0;
     private final Performance performance;
     private final GameDisplay gameDisplay;
     GameOverListener gameOverListener;
     private boolean isGameOver = false;
+    private int numberOfEnemiesKilled = 0;
 
     interface GameOverListener {
         void onGameOver();
@@ -89,6 +93,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 if (joystick.getIsPressed()) {
                     // Joystick was pressed before this event -> cast spell
                     numberOfSpellsToCast ++;
+                    addSoundShoot();
                 } else if (joystick.isPressed(event.getX(), event.getY())) {
                     // Joystick is pressed in this event -> setIsPressed(true) and store pointer id
                     joystickPointerId = event.getPointerId(event.getActionIndex());
@@ -96,6 +101,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 } else {
                     // Joystick was not previously, and is not pressed in this event -> cast spell
                     numberOfSpellsToCast ++;
+                    addSoundShoot();
                 }
                 return true;
             case MotionEvent.ACTION_MOVE:
@@ -157,6 +163,10 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
             spell.draw(canvas, gameDisplay);
         }
 
+        for (Health health : healthList) {
+            health.draw(canvas, gameDisplay);
+        }
+
         // Draw game panels
         joystick.draw(canvas);
         performance.draw(canvas);
@@ -215,7 +225,29 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 if (Circle.isColliding(spell, enemy)) {
                     iteratorSpell.remove();
                     iteratorEnemy.remove();
+                    addSoundHitEnemy();
+                    if (numberOfEnemiesKilled < 5) {
+                        numberOfEnemiesKilled++;
+                        if (numberOfEnemiesKilled == 5) {
+                            // Add health to the game
+                            healthList.add(new Health(getContext()));
+                            numberOfEnemiesKilled = 0;
+                        }
+                    }
                     break;
+                }
+            }
+        }
+
+        // Iterate through healthList and Check for collision between each health and the player
+        Iterator<Health> iteratorHealth = healthList.iterator();
+        while (iteratorHealth.hasNext()) {
+            Health health = iteratorHealth.next();
+            if (health.isColliding(player)) {
+                // Remove health if it collides with the player
+                iteratorHealth.remove();
+                if (player.getHealthPoint() < 5) {
+                    player.setHealthPoint(player.getHealthPoint() + 1);
                 }
             }
         }
@@ -236,5 +268,19 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     public void pause() {
         gameLoop.stopLoop();
+    }
+
+    private void addSoundShoot() {
+        MediaPlayer mediaPlayer = MediaPlayer.create(getContext(), R.raw.sound_shoot);
+        mediaPlayer.start();
+
+        mediaPlayer.setOnCompletionListener(MediaPlayer::release);
+    }
+
+    private void addSoundHitEnemy() {
+        MediaPlayer mediaPlayer = MediaPlayer.create(getContext(), R.raw.sound_hit_enemy);
+        mediaPlayer.start();
+
+        mediaPlayer.setOnCompletionListener(MediaPlayer::release);
     }
 }
