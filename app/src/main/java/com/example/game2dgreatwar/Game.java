@@ -262,12 +262,10 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
         player.setHealthPoint(5);
         enemyList.clear();
         spellList.clear();
+        healthList.clear();
+        numberOfEnemiesKilled = 0;
         numberOfSpellsToCast = 0;
         isGameOver = false;
-    }
-
-    public void pause() {
-        gameLoop.stopLoop();
     }
 
     private void addSoundShoot() {
