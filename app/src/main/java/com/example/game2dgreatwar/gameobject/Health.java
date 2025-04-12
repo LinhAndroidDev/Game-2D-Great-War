@@ -15,9 +15,9 @@ public class Health {
     private final double radius = 50; // Bán kính của Health
 
     // Constructor có thêm resourceId để load ảnh Bitmap
-    public Health(Context context) {
-        this.positionX = 100 + Math.random() * (2000 - 100);
-        this.positionY = 100 + Math.random() * (2000 - 100);
+    public Health(Context context, double positionX, double positionY) {
+        this.positionX = positionX;
+        this.positionY = positionY;
         this.bitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.ic_health);
         this.bitmap = Bitmap.createScaledBitmap(this.bitmap, (int) radius, (int) radius, true);
     }

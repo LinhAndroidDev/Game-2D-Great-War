@@ -4,7 +4,6 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.media.MediaPlayer;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -93,7 +92,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 if (joystick.getIsPressed()) {
                     // Joystick was pressed before this event -> cast spell
                     numberOfSpellsToCast ++;
-                    addSoundShoot();
+                    Utils.addSound(getContext(), R.raw.sound_shoot);
                 } else if (joystick.isPressed(event.getX(), event.getY())) {
                     // Joystick is pressed in this event -> setIsPressed(true) and store pointer id
                     joystickPointerId = event.getPointerId(event.getActionIndex());
@@ -101,7 +100,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 } else {
                     // Joystick was not previously, and is not pressed in this event -> cast spell
                     numberOfSpellsToCast ++;
-                    addSoundShoot();
+                    Utils.addSound(getContext(), R.raw.sound_shoot);
                 }
                 return true;
             case MotionEvent.ACTION_MOVE:
@@ -156,7 +155,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
         player.draw(canvas, gameDisplay);
 
         for (Enemy enemy : enemyList) {
-            enemy.draw(canvas, gameDisplay);
+            enemy.drawEnemy(canvas, gameDisplay);
         }
 
         for (Spell spell : spellList) {
@@ -213,6 +212,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
             Circle enemy = iteratorEnemy.next();
             if (Circle.isColliding(enemy, player)) {
                 // Remove enemy if it collides with the player
+                Utils.addSound(getContext(), R.raw.sound_enemy_attack);
                 iteratorEnemy.remove();
                 player.setHealthPoint(player.getHealthPoint() - 1);
                 continue;
@@ -223,17 +223,17 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 Circle spell = iteratorSpell.next();
                 // Remove enemy if it collides with a spell
                 if (Circle.isColliding(spell, enemy)) {
-                    iteratorSpell.remove();
-                    iteratorEnemy.remove();
-                    addSoundHitEnemy();
+                    Utils.addSound(getContext(), R.raw.sound_hit_enemy);
                     if (numberOfEnemiesKilled < 5) {
                         numberOfEnemiesKilled++;
                         if (numberOfEnemiesKilled == 5) {
                             // Add health to the game
-                            healthList.add(new Health(getContext()));
+                            healthList.add(new Health(getContext(), enemy.getPositionX(), enemy.getPositionY()));
                             numberOfEnemiesKilled = 0;
                         }
                     }
+                    iteratorSpell.remove();
+                    iteratorEnemy.remove();
                     break;
                 }
             }
@@ -248,6 +248,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 iteratorHealth.remove();
                 if (player.getHealthPoint() < 5) {
                     player.setHealthPoint(player.getHealthPoint() + 1);
+                    Utils.addSound(getContext(), R.raw.sound_health);
                 }
             }
         }
@@ -266,19 +267,5 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
         numberOfEnemiesKilled = 0;
         numberOfSpellsToCast = 0;
         isGameOver = false;
-    }
-
-    private void addSoundShoot() {
-        MediaPlayer mediaPlayer = MediaPlayer.create(getContext(), R.raw.sound_shoot);
-        mediaPlayer.start();
-
-        mediaPlayer.setOnCompletionListener(MediaPlayer::release);
-    }
-
-    private void addSoundHitEnemy() {
-        MediaPlayer mediaPlayer = MediaPlayer.create(getContext(), R.raw.sound_hit_enemy);
-        mediaPlayer.start();
-
-        mediaPlayer.setOnCompletionListener(MediaPlayer::release);
     }
 }

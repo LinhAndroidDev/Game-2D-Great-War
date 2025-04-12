@@ -1,5 +1,6 @@
 package com.example.game2dgreatwar.gameobject;
 
+import android.content.Context;
 import android.graphics.Canvas;
 
 import com.example.game2dgreatwar.GameDisplay;

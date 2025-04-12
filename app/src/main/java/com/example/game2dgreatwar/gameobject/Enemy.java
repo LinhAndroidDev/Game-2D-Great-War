@@ -1,11 +1,17 @@
 package com.example.game2dgreatwar.gameobject;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 
 import androidx.core.content.ContextCompat;
 
+import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.GameLoop;
 import com.example.game2dgreatwar.R;
+
+import java.util.Random;
 
 /**
  * Enemy is a character which always moves in the direction of the player.
@@ -20,6 +26,7 @@ public class Enemy extends Circle {
     private static final double UPDATES_PER_SPAWN = GameLoop.MAX_UPS/SPAWNS_PER_SECOND;
     private static double updatesUntilNextSpawn = UPDATES_PER_SPAWN;
     private final Player player;
+    private Bitmap bitmap;
 
     public Enemy(Context context, Player player, double positionX, double positionY, double radius) {
         super(context, ContextCompat.getColor(context, R.color.enemy), positionX, positionY, radius);
@@ -37,9 +44,13 @@ public class Enemy extends Circle {
             ContextCompat.getColor(context, R.color.enemy),
    Math.random()*1000,
    Math.random()*1000,
-     30
+     60
         );
         this.player = player;
+        int[] resArray = { R.drawable.ic_ghost_white, R.drawable.ic_ghost_blue, R.drawable.ic_ghost_scary, R.drawable.ic_bat};
+        int randomResId = resArray[new Random().nextInt(4)];
+        bitmap = BitmapFactory.decodeResource(context.getResources(), randomResId);
+        bitmap = Bitmap.createScaledBitmap(bitmap, 80, 80, true);
     }
 
     /**
@@ -86,6 +97,15 @@ public class Enemy extends Circle {
         // =========================================================================================
         positionX += velocityX;
         positionY += velocityY;
+    }
+
+    public void drawEnemy(Canvas canvas, GameDisplay gameDisplay) {
+        canvas.drawBitmap(
+                bitmap,
+                (float) gameDisplay.gameToDisplayCoordinatesX(positionX),
+                (float) gameDisplay.gameToDisplayCoordinatesY(positionY),
+                null
+        );
     }
 }
 
