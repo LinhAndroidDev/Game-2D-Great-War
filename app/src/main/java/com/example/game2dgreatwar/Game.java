@@ -13,6 +13,7 @@ import android.view.SurfaceView;
 import androidx.annotation.NonNull;
 
 import com.example.game2dgreatwar.gameobject.Circle;
+import com.example.game2dgreatwar.gameobject.Coin;
 import com.example.game2dgreatwar.gameobject.Enemy;
 import com.example.game2dgreatwar.gameobject.Health;
 import com.example.game2dgreatwar.gameobject.Player;
@@ -41,12 +42,37 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final List<Enemy> enemyList = new ArrayList<>();
     private final List<Spell> spellList = new ArrayList<>();
     private final List<Health> healthList = new ArrayList<>();
+    private final List<Coin> coinList = new ArrayList<>();
     private int numberOfSpellsToCast = 0;
     private final Performance performance;
     private final GameDisplay gameDisplay;
     GameOverListener gameOverListener;
     private boolean isGameOver = false;
     private int numberOfEnemiesKilled = 0;
+
+    public enum Award {
+        COIN(0),
+        HEALTH(1);
+
+        private final int value;
+
+        Award(int value) {
+            this.value = value;
+        }
+
+        public int getValue() {
+            return value;
+        }
+
+        public static Award of(int value) {
+            for (Award award : Award.values()) {
+                if (award.getValue() == value) {
+                    return award;
+                }
+            }
+            throw new IllegalArgumentException("Invalid Award value: " + value);
+        }
+    }
 
     interface GameOverListener {
         void onGameOver();
@@ -166,6 +192,10 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
             health.draw(canvas, gameDisplay);
         }
 
+        for (Coin coin : coinList) {
+            coin.draw(canvas, gameDisplay);
+        }
+
         // Draw game panels
         joystick.draw(canvas);
         performance.draw(canvas);
@@ -221,17 +251,35 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
             Iterator<Spell> iteratorSpell = spellList.iterator();
             while (iteratorSpell.hasNext()) {
                 Circle spell = iteratorSpell.next();
+
                 // Remove enemy if it collides with a spell
                 if (Circle.isColliding(spell, enemy)) {
+                    // Play sound when hitting enemy
                     Utils.addSound(getContext(), R.raw.sound_hit_enemy);
+
+                    // Increase the number of enemies killed
                     if (numberOfEnemiesKilled < 5) {
                         numberOfEnemiesKilled++;
+
+                        // If 5 enemies are destroyed, generate random reward
                         if (numberOfEnemiesKilled == 5) {
-                            // Add health to the game
-                            healthList.add(new Health(getContext(), enemy.getPositionX(), enemy.getPositionY()));
+                            int randomValue = (int) (Math.random() * 2);
+                            switch (Award.of(randomValue)) {
+                                case COIN:
+                                    // Add coin to the game
+                                    coinList.add(new Coin(getContext(), enemy.getPositionX(), enemy.getPositionY()));
+                                    Utils.addSound(getContext(), R.raw.sound_coin_appear);
+                                    break;
+                                case HEALTH:
+                                    // Add health to the game
+                                    healthList.add(new Health(getContext(), enemy.getPositionX(), enemy.getPositionY()));
+                                    break;
+                            }
                             numberOfEnemiesKilled = 0;
                         }
                     }
+
+                    // Remove spell and enemy from list
                     iteratorSpell.remove();
                     iteratorEnemy.remove();
                     break;
@@ -252,6 +300,17 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
                 }
             }
         }
+
+        // Iterate through coinList and Check for collision between each coin and the player
+        Iterator<Coin> iteratorCoin = coinList.iterator();
+        while (iteratorCoin.hasNext()) {
+            Coin coin = iteratorCoin.next();
+            if (coin.isColliding(player)) {
+                // Remove coin if it collides with the player
+                iteratorCoin.remove();
+                Utils.addSound(getContext(), R.raw.sound_coin_recieved);
+            }
+        }
         
         // Update gameDisplay so that it's center is set to the new center of the player's 
         // game coordinates
@@ -264,6 +323,7 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
         enemyList.clear();
         spellList.clear();
         healthList.clear();
+        coinList.clear();
         numberOfEnemiesKilled = 0;
         numberOfSpellsToCast = 0;
         isGameOver = false;
