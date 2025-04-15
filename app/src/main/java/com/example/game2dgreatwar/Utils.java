@@ -23,4 +23,26 @@ public class Utils {
 
         mediaPlayer.setOnCompletionListener(MediaPlayer::release);
     }
+
+    // Check if circle and rectangle are colliding
+    public static boolean isCollidingCircleRect(
+            float circleX, float circleY, float radius,
+            float rectX, float rectY, float rectWidth, float rectHeight) {
+
+        // Tìm điểm gần nhất của hình chữ nhật với tâm hình tròn
+        float closestX = clamp(circleX, rectX, rectX + rectWidth);
+        float closestY = clamp(circleY, rectY, rectY + rectHeight);
+
+        // Tính khoảng cách từ điểm gần nhất tới tâm hình tròn
+        float distanceX = circleX - closestX;
+        float distanceY = circleY - closestY;
+
+        float distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
+
+        return distanceSquared < (radius * radius);
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(value, max));
+    }
 }

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -32,7 +33,7 @@ import java.util.List;
  * Game manages all objects in the game and is responsible for updating all states and render all
  * objects to the screen
  */
-class Game extends SurfaceView implements SurfaceHolder.Callback {
+public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private final Tilemap tilemap;
     private int joystickPointerId = 0;
@@ -78,8 +79,8 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
         void onGameOver();
     }
 
-    public Game(Context context) {
-        super(context);
+    public Game(Context context, AttributeSet attrs) {
+        super(context, attrs);
 
         // Get surface holder and add callback
         SurfaceHolder surfaceHolder = getHolder();
@@ -89,7 +90,8 @@ class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         // Initialize game panels
         performance = new Performance(context, gameLoop);
-        joystick = new Joystick(275, 800, 100, 70);
+        MyApplication application = (MyApplication) context.getApplicationContext();
+        joystick = new Joystick(275, application.getScreenHeight() * 3 / 4, 120, 90);
 
         // Initialize game objects
         SpriteSheet spriteSheet = new SpriteSheet(context);

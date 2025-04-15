@@ -1,31 +1,40 @@
 package com.example.game2dgreatwar
 
+import android.R
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
+import com.example.game2dgreatwar.databinding.ActivityMainBinding
 import com.example.game2dgreatwar.dialog.DialogGameOver
 
 class MainActivity : AppCompatActivity() {
+    private var binding: ActivityMainBinding? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Set content view to game, so that objects in the Game class can be rendered to the screen
-        val game = Game(this)
-        game.gameOverListener = Game.GameOverListener {
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding?.root)
+        val items = listOf("Item 1", "Item 2", "Item 3")
+        val adapter = ArrayAdapter(this, R.layout.simple_spinner_item, items)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding?.btnFps?.adapter = adapter
+
+        binding?.gameView?.gameOverListener = Game.GameOverListener {
             runOnUiThread {
                 val dialogGameOver = DialogGameOver()
                 dialogGameOver.setCancelable(false)
                 dialogGameOver.show(supportFragmentManager, "gameOver")
                 dialogGameOver.onConfirmListener = object : DialogGameOver.OnClickListener {
                     override fun onConfirm() {
-                        game.resetGame()
+                        binding?.gameView?.resetGame()
                     }
 
                 }
             }
         }
-        setContentView(game)
         setUpFullScreen()
     }
 

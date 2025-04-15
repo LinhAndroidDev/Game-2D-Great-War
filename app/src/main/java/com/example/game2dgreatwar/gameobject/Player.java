@@ -18,7 +18,7 @@ import com.example.game2dgreatwar.graphics.Animator;
  * The player class is an extension of a Circle, which is an extension of a GameObject
  */
 public class Player extends Circle {
-    public static final double SPEED_PIXELS_PER_SECOND = 400.0;
+    public static final double SPEED_PIXELS_PER_SECOND = 700.0;
     private static final double MAX_SPEED = SPEED_PIXELS_PER_SECOND / GameLoop.MAX_UPS;
     public static final int MAX_HEALTH_POINTS = 5;
     private final Joystick joystick;
