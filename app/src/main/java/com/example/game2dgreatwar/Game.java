@@ -90,8 +90,14 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         // Initialize game panels
         performance = new Performance(context, gameLoop);
-        MyApplication application = (MyApplication) context.getApplicationContext();
-        joystick = new Joystick(275, application.getScreenHeight() * 3 / 4, 120, 90);
+
+        // Initialize display metrics from the activity window (landscape-aware)
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        ((Activity) getContext()).getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+
+        // Joystick position/size are proportional to the real screen; refined again in surfaceChanged
+        joystick = new Joystick(0, 0, 1, 1);
+        joystick.layoutForScreen(displayMetrics.widthPixels, displayMetrics.heightPixels);
 
         // Initialize game objects
         SpriteSheet spriteSheet = new SpriteSheet(context);
@@ -99,8 +105,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         player = new Player(context, joystick, 2*500, 500, 32, animator);
 
         // Initialize display and center it around the player
-        DisplayMetrics displayMetrics = new DisplayMetrics();
-        ((Activity) getContext()).getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         gameDisplay = new GameDisplay(displayMetrics.widthPixels, displayMetrics.heightPixels, player);
 
         // Initialize Tilemap
@@ -165,6 +169,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
         Log.d("Game.java", "surfaceChanged()");
+        joystick.layoutForScreen(width, height);
     }
 
     @Override
