@@ -16,14 +16,18 @@ import androidx.annotation.NonNull;
 import com.example.game2dgreatwar.gameobject.Circle;
 import com.example.game2dgreatwar.gameobject.Coin;
 import com.example.game2dgreatwar.gameobject.Enemy;
+import com.example.game2dgreatwar.gameobject.EnemyProjectile;
+import com.example.game2dgreatwar.gameobject.EnemyType;
 import com.example.game2dgreatwar.gameobject.Health;
 import com.example.game2dgreatwar.gameobject.Player;
 import com.example.game2dgreatwar.gameobject.Spell;
 import com.example.game2dgreatwar.gamepanel.Joystick;
+import com.example.game2dgreatwar.gamepanel.LevelProgressPanel;
 import com.example.game2dgreatwar.gamepanel.Performance;
 import com.example.game2dgreatwar.graphics.Animator;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
 import com.example.game2dgreatwar.map.MapLayout;
+import com.example.game2dgreatwar.map.TemporaryHazard;
 import com.example.game2dgreatwar.map.Tilemap;
 
 import java.util.ArrayList;
@@ -36,6 +40,8 @@ import java.util.List;
  */
 public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
+    private static final double BOSS_PLAYER_OFFSET = 280;
+
     private final Tilemap tilemap;
     private int joystickPointerId = 0;
     private final Joystick joystick;
@@ -43,14 +49,20 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private GameLoop gameLoop;
     private final List<Enemy> enemyList = new ArrayList<>();
     private final List<Spell> spellList = new ArrayList<>();
+    private final List<EnemyProjectile> enemyProjectileList = new ArrayList<>();
     private final List<Health> healthList = new ArrayList<>();
     private final List<Coin> coinList = new ArrayList<>();
     private int numberOfSpellsToCast = 0;
     private final Performance performance;
+    private final LevelProgressPanel levelProgressPanel = new LevelProgressPanel();
+    private final LevelController levelController = new LevelController();
     private final GameDisplay gameDisplay;
+    private float screenWidthPixels;
+
     GameOverListener gameOverListener;
+    VictoryListener victoryListener;
     private boolean isGameOver = false;
-    private int numberOfEnemiesKilled = 0;
+    private int awardKillCounter = 0;
 
     public enum Award {
         COIN(0),
@@ -80,27 +92,26 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         void onGameOver();
     }
 
+    interface VictoryListener {
+        void onVictory();
+    }
+
     public Game(Context context, AttributeSet attrs) {
         super(context, attrs);
 
-        // Get surface holder and add callback
         SurfaceHolder surfaceHolder = getHolder();
         surfaceHolder.addCallback(this);
 
         gameLoop = new GameLoop(this, surfaceHolder);
-
-        // Initialize game panels
         performance = new Performance(context, gameLoop);
 
-        // Initialize display metrics from the activity window (landscape-aware)
         DisplayMetrics displayMetrics = new DisplayMetrics();
         ((Activity) getContext()).getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        screenWidthPixels = displayMetrics.widthPixels;
 
-        // Joystick position/size are proportional to the real screen; refined again in surfaceChanged
         joystick = new Joystick(0, 0, 1, 1);
         joystick.layoutForScreen(displayMetrics.widthPixels, displayMetrics.heightPixels);
 
-        // Initialize tilemap before player so collision/bounds are available
         SpriteSheet spriteSheet = new SpriteSheet(context);
         tilemap = new Tilemap(spriteSheet);
 
@@ -115,51 +126,40 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 tilemap
         );
 
-        // Initialize display and center it around the player
         gameDisplay = new GameDisplay(displayMetrics.widthPixels, displayMetrics.heightPixels, player);
-
         setFocusable(true);
     }
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-
-        // Handle user input touch event actions
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
                 if (joystick.getIsPressed()) {
-                    // Joystick was pressed before this event -> cast spell
-                    numberOfSpellsToCast ++;
+                    numberOfSpellsToCast++;
                     Utils.addSound(getContext(), R.raw.sound_shoot);
                 } else if (joystick.isPressed(event.getX(), event.getY())) {
-                    // Joystick is pressed in this event -> setIsPressed(true) and store pointer id
                     joystickPointerId = event.getPointerId(event.getActionIndex());
                     joystick.setIsPressed(true);
                 } else {
-                    // Joystick was not previously, and is not pressed in this event -> cast spell
-                    numberOfSpellsToCast ++;
+                    numberOfSpellsToCast++;
                     Utils.addSound(getContext(), R.raw.sound_shoot);
                 }
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (joystick.getIsPressed()) {
-                    // Joystick was pressed previously and is now moved
                     joystick.setActuator(event.getX(), event.getY());
                 }
                 return true;
-
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
                 if (joystickPointerId == event.getPointerId(event.getActionIndex())) {
-                    // joystick pointer was let go off -> setIsPressed(false) and resetActuator()
                     joystick.setIsPressed(false);
                     joystick.resetActuator();
                 }
                 return true;
         }
-
         return super.onTouchEvent(event);
     }
 
@@ -177,6 +177,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
         Log.d("Game.java", "surfaceChanged()");
+        screenWidthPixels = width;
         joystick.layoutForScreen(width, height);
     }
 
@@ -189,68 +190,131 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     public void draw(Canvas canvas) {
         super.draw(canvas);
 
-        // Draw Tilemap
         tilemap.draw(canvas, gameDisplay);
-
-        // Draw game objects
         player.draw(canvas, gameDisplay);
 
         for (Enemy enemy : enemyList) {
             enemy.drawEnemy(canvas, gameDisplay);
         }
-
         for (Spell spell : spellList) {
             spell.draw(canvas, gameDisplay);
         }
-
+        for (EnemyProjectile projectile : enemyProjectileList) {
+            projectile.draw(canvas, gameDisplay);
+        }
         for (Health health : healthList) {
             health.draw(canvas, gameDisplay);
         }
-
         for (Coin coin : coinList) {
             coin.draw(canvas, gameDisplay);
         }
 
-        // Draw game panels
         joystick.draw(canvas);
         performance.draw(canvas);
-
+        levelProgressPanel.draw(canvas, levelController, screenWidthPixels);
     }
 
     public void update() {
-        // Stop updating the game if the player is dead
+        if (levelController.isVictory()) {
+            return;
+        }
+
         if (player.getHealthPoint() <= 0) {
             if (!isGameOver) {
                 isGameOver = true;
-                gameOverListener.onGameOver();
+                if (gameOverListener != null) {
+                    gameOverListener.onGameOver();
+                }
             }
             return;
         }
 
-        // Update game state
         joystick.update();
         player.update();
+        tilemap.updateTemporaryHazards();
 
-        // Spawn enemy
-        if(Enemy.readyToSpawn()) {
-            enemyList.add(new Enemy(getContext(), player));
+        if (levelController.shouldSpawnMinions() && Enemy.readyToSpawn()) {
+            enemyList.add(Enemy.createNormal(
+                    getContext(),
+                    player,
+                    levelController.getCurrentEnemyType()
+            ));
         }
 
-        // Update states of all enemies
         for (Enemy enemy : enemyList) {
             enemy.update();
+            handleEnemyAbilities(enemy);
         }
 
-        // Update states of all spells
         while (numberOfSpellsToCast > 0) {
             spellList.add(new Spell(getContext(), player));
-            numberOfSpellsToCast --;
+            numberOfSpellsToCast--;
         }
         for (Spell spell : spellList) {
             spell.update();
         }
 
-        // Remove spells that hit solid tiles or leave the map
+        updateEnemyProjectiles();
+        removeInvalidPlayerSpells();
+        resolveCombat();
+        collectPickups();
+
+        gameDisplay.update();
+    }
+
+    private void handleEnemyAbilities(Enemy enemy) {
+        TemporaryHazard hazard = enemy.tryPlaceHazard(tilemap, player);
+        if (hazard != null) {
+            tilemap.addTemporaryHazard(hazard);
+        }
+
+        List<EnemyProjectile> shots = enemy.tryShoot(getContext());
+        for (EnemyProjectile shot : shots) {
+            addEnemyProjectile(shot);
+        }
+    }
+
+    private void addEnemyProjectile(EnemyProjectile projectile) {
+        if (projectile.isBouncing()) {
+            int bouncingCount = 0;
+            for (EnemyProjectile existing : enemyProjectileList) {
+                if (existing.isBouncing()) {
+                    bouncingCount++;
+                }
+            }
+            if (bouncingCount >= EnemyProjectile.MAX_BOUNCING_PROJECTILES) {
+                return;
+            }
+        }
+        enemyProjectileList.add(projectile);
+    }
+
+    private void updateEnemyProjectiles() {
+        Iterator<EnemyProjectile> iterator = enemyProjectileList.iterator();
+        while (iterator.hasNext()) {
+            EnemyProjectile projectile = iterator.next();
+            if (projectile.isBouncing()) {
+                projectile.updateWithCollision(tilemap);
+            } else {
+                projectile.update();
+                if (projectile.shouldBeRemoved(tilemap)) {
+                    iterator.remove();
+                    continue;
+                }
+            }
+
+            if (Circle.isColliding(projectile, player)) {
+                if (player.takeDamage(1)) {
+                    Utils.addSound(getContext(), R.raw.sound_enemy_attack);
+                }
+                if (!projectile.isBouncing()) {
+                    iterator.remove();
+                }
+            }
+        }
+    }
+
+    private void removeInvalidPlayerSpells() {
         Iterator<Spell> iteratorSpellTile = spellList.iterator();
         while (iteratorSpellTile.hasNext()) {
             Spell spell = iteratorSpellTile.next();
@@ -262,89 +326,194 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                 iteratorSpellTile.remove();
             }
         }
+    }
 
-        // Iterate through enemyList and Check for collision between each enemy and the player and
-        // spells in spellList.
+    private void resolveCombat() {
+        boolean shouldStartBossFight = false;
+        boolean bossWasDefeated = false;
+
         Iterator<Enemy> iteratorEnemy = enemyList.iterator();
         while (iteratorEnemy.hasNext()) {
-            Circle enemy = iteratorEnemy.next();
-            if (Circle.isColliding(enemy, player)) {
-                // Remove enemy if it collides with the player
-                Utils.addSound(getContext(), R.raw.sound_enemy_attack);
-                iteratorEnemy.remove();
-                player.setHealthPoint(player.getHealthPoint() - 1);
-                continue;
+            Enemy enemy = iteratorEnemy.next();
+
+            if (enemy.canDealContactDamage() && Circle.isColliding(enemy, player)) {
+                if (player.takeDamage(1)) {
+                    Utils.addSound(getContext(), R.raw.sound_enemy_attack);
+                }
+                // Normal enemies kamikaze on contact; bosses stay and keep chasing
+                if (!enemy.isBoss()) {
+                    iteratorEnemy.remove();
+                    continue;
+                }
             }
 
             Iterator<Spell> iteratorSpell = spellList.iterator();
             while (iteratorSpell.hasNext()) {
-                Circle spell = iteratorSpell.next();
+                Spell spell = iteratorSpell.next();
+                if (!Circle.isColliding(spell, enemy)) {
+                    continue;
+                }
 
-                // Remove enemy if it collides with a spell
-                if (Circle.isColliding(spell, enemy)) {
-                    // Play sound when hitting enemy
+                iteratorSpell.remove();
+
+                if (enemy.tryConsumeReflect()) {
+                    addEnemyProjectile(new EnemyProjectile(
+                            getContext(),
+                            enemy.getPositionX(),
+                            enemy.getPositionY(),
+                            -spell.getVelocityX(),
+                            -spell.getVelocityY(),
+                            false
+                    ));
                     Utils.addSound(getContext(), R.raw.sound_hit_enemy);
-
-                    // Increase the number of enemies killed
-                    if (numberOfEnemiesKilled < 5) {
-                        numberOfEnemiesKilled++;
-
-                        // If 5 enemies are destroyed, generate random reward
-                        if (numberOfEnemiesKilled == 5) {
-                            int randomValue = (int) (Math.random() * 2);
-                            spawnAwardAt(Award.of(randomValue), enemy.getPositionX(), enemy.getPositionY());
-                            numberOfEnemiesKilled = 0;
-                        }
-                    }
-
-                    // Remove spell and enemy from list
-                    iteratorSpell.remove();
-                    iteratorEnemy.remove();
                     break;
                 }
+
+                if (!enemy.canTakeDamage()) {
+                    break;
+                }
+
+                Utils.addSound(getContext(), R.raw.sound_hit_enemy);
+                enemy.takeDamage(1);
+
+                if (!enemy.isDead()) {
+                    break;
+                }
+
+                boolean wasBoss = enemy.isBoss();
+                double deathX = enemy.getPositionX();
+                double deathY = enemy.getPositionY();
+                iteratorEnemy.remove();
+
+                if (wasBoss) {
+                    bossWasDefeated = true;
+                } else {
+                    registerNormalKillRewards(deathX, deathY);
+                    if (levelController.onNormalEnemyKilled()) {
+                        shouldStartBossFight = true;
+                    }
+                }
+                break;
+            }
+
+            // List may be cleared by boss flow — stop iterating safely
+            if (shouldStartBossFight || bossWasDefeated) {
+                break;
             }
         }
 
-        // Iterate through healthList and Check for collision between each health and the player
+        if (bossWasDefeated) {
+            handleBossDefeated();
+        } else if (shouldStartBossFight) {
+            startBossFight();
+        }
+    }
+
+    private void registerNormalKillRewards(double deathX, double deathY) {
+        awardKillCounter++;
+        if (awardKillCounter >= 5) {
+            awardKillCounter = 0;
+            int randomValue = (int) (Math.random() * 2);
+            spawnAwardAt(Award.of(randomValue), deathX, deathY);
+        }
+    }
+
+    private void startBossFight() {
+        enemyList.clear();
+        enemyProjectileList.clear();
+        tilemap.clearTemporaryHazards();
+        spellList.clear();
+        player.healFull();
+
+        gameDisplay.update();
+        double bossX = gameDisplay.getGameCenterX();
+        double bossY = gameDisplay.getGameCenterY();
+        double[] bossPos = tilemap.findNearestWalkablePosition(bossX, bossY);
+        if (bossPos != null) {
+            bossX = bossPos[0];
+            bossY = bossPos[1];
+        }
+
+        EnemyType type = levelController.getCurrentEnemyType();
+        Enemy boss = Enemy.createBoss(
+                getContext(),
+                player,
+                type,
+                bossX,
+                bossY,
+                levelController.getBossMaxHealth()
+        );
+        enemyList.add(boss);
+
+        double playerX = bossX;
+        double playerY = bossY + BOSS_PLAYER_OFFSET;
+        double[] playerPos = tilemap.findNearestWalkablePosition(playerX, playerY);
+        if (playerPos != null) {
+            player.setPositionSafe(playerPos[0], playerPos[1]);
+        } else {
+            player.setPositionSafe(playerX, playerY);
+        }
+
+        levelController.enterBossFight();
+        Enemy.resetSpawnTimer();
+    }
+
+    private void handleBossDefeated() {
+        enemyProjectileList.clear();
+        tilemap.clearTemporaryHazards();
+        spellList.clear();
+        player.healFull();
+
+        boolean won = levelController.onBossKilled();
+        if (won) {
+            if (victoryListener != null) {
+                victoryListener.onVictory();
+            }
+            return;
+        }
+
+        awardKillCounter = 0;
+        Enemy.resetSpawnTimer();
+    }
+
+    private void collectPickups() {
         Iterator<Health> iteratorHealth = healthList.iterator();
         while (iteratorHealth.hasNext()) {
             Health health = iteratorHealth.next();
             if (health.isColliding(player)) {
-                // Remove health if it collides with the player
                 iteratorHealth.remove();
-                if (player.getHealthPoint() < 5) {
+                if (player.getHealthPoint() < Player.MAX_HEALTH_POINTS) {
                     player.setHealthPoint(player.getHealthPoint() + 1);
                     Utils.addSound(getContext(), R.raw.sound_health);
                 }
             }
         }
 
-        // Iterate through coinList and Check for collision between each coin and the player
         Iterator<Coin> iteratorCoin = coinList.iterator();
         while (iteratorCoin.hasNext()) {
             Coin coin = iteratorCoin.next();
             if (coin.isColliding(player)) {
-                // Remove coin if it collides with the player
                 iteratorCoin.remove();
                 Utils.addSound(getContext(), R.raw.sound_coin_recieved);
             }
         }
-        
-        // Update gameDisplay so that it's center is set to the new center of the player's 
-        // game coordinates
-        gameDisplay.update();
     }
 
     public void resetGame() {
-        // Reset game state
-        player.setHealthPoint(5);
+        player.healFull();
+        player.setPositionSafe(MapLayout.PLAYER_SPAWN_X, MapLayout.PLAYER_SPAWN_Y);
         enemyList.clear();
         spellList.clear();
+        enemyProjectileList.clear();
         healthList.clear();
         coinList.clear();
-        numberOfEnemiesKilled = 0;
+        tilemap.clearTemporaryHazards();
         numberOfSpellsToCast = 0;
+        awardKillCounter = 0;
         isGameOver = false;
+        levelController.reset();
+        Enemy.resetSpawnTimer();
+        gameDisplay.update();
     }
 
     private boolean isSpellOutOfBounds(Spell spell) {

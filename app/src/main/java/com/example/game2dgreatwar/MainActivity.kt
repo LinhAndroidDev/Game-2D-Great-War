@@ -8,6 +8,7 @@ import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
 import com.example.game2dgreatwar.databinding.ActivityMainBinding
 import com.example.game2dgreatwar.dialog.DialogGameOver
+import com.example.game2dgreatwar.dialog.DialogVictory
 
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
@@ -31,10 +32,23 @@ class MainActivity : AppCompatActivity() {
                     override fun onConfirm() {
                         binding?.gameView?.resetGame()
                     }
-
                 }
             }
         }
+
+        binding?.gameView?.victoryListener = Game.VictoryListener {
+            runOnUiThread {
+                val dialogVictory = DialogVictory()
+                dialogVictory.setCancelable(false)
+                dialogVictory.show(supportFragmentManager, "victory")
+                dialogVictory.onConfirmListener = object : DialogVictory.OnClickListener {
+                    override fun onConfirm() {
+                        binding?.gameView?.resetGame()
+                    }
+                }
+            }
+        }
+
         setUpFullScreen()
     }
 

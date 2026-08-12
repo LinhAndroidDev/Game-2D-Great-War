@@ -16,7 +16,6 @@ import com.example.game2dgreatwar.map.Tilemap;
 
 /**
  * Player is the main character of the game, which the user can control with a touch joystick.
- * The player class is an extension of a Circle, which is an extension of a GameObject
  */
 public class Player extends Circle {
     public static final double SPEED_PIXELS_PER_SECOND = 700.0;
@@ -24,6 +23,7 @@ public class Player extends Circle {
     public static final int MAX_HEALTH_POINTS = 5;
     private static final int LAVA_DAMAGE = 2;
     private static final long LAVA_DAMAGE_COOLDOWN_MS = 1000L;
+    private static final long I_FRAME_MS = 750L;
 
     private final Joystick joystick;
     private final HealthBar healthBar;
@@ -32,6 +32,7 @@ public class Player extends Circle {
     private final PlayerState playerState;
     private final Tilemap tilemap;
     private long lastLavaDamageTimeMs = 0L;
+    private long iFrameUntilMs = 0L;
 
     public Player(
             Context context,
@@ -56,7 +57,6 @@ public class Player extends Circle {
 
         boolean touchedLava = false;
 
-        // Resolve X axis separately so the player can slide along walls
         positionX += velocityX;
         if (tilemap.circleIntersectsSolid(positionX, positionY, radius)) {
             if (tilemap.circleIntersectsLava(positionX, positionY, radius)) {
@@ -65,7 +65,6 @@ public class Player extends Circle {
             positionX -= velocityX;
         }
 
-        // Resolve Y axis
         positionY += velocityY;
         if (tilemap.circleIntersectsSolid(positionX, positionY, radius)) {
             if (tilemap.circleIntersectsLava(positionX, positionY, radius)) {
@@ -74,7 +73,6 @@ public class Player extends Circle {
             positionY -= velocityY;
         }
 
-        // Also damage if already overlapping lava (e.g. edge contact after resolve)
         if (tilemap.circleIntersectsLava(positionX, positionY, radius)) {
             touchedLava = true;
         }
@@ -100,7 +98,27 @@ public class Player extends Circle {
             return;
         }
         lastLavaDamageTimeMs = now;
-        setHealthPoint(healthPoints - LAVA_DAMAGE);
+        takeDamage(LAVA_DAMAGE);
+    }
+
+    public boolean takeDamage(int amount) {
+        long now = System.currentTimeMillis();
+        if (now < iFrameUntilMs) {
+            return false;
+        }
+        healthPoints = Math.max(0, healthPoints - amount);
+        iFrameUntilMs = now + I_FRAME_MS;
+        return true;
+    }
+
+    public void healFull() {
+        healthPoints = MAX_HEALTH_POINTS;
+        iFrameUntilMs = 0L;
+    }
+
+    public void setPositionSafe(double x, double y) {
+        setPosition(x, y);
+        clampToMapBounds();
     }
 
     private void clampToMapBounds() {
@@ -122,11 +140,7 @@ public class Player extends Circle {
     }
 
     public void setHealthPoint(int healthPoints) {
-        if (healthPoints >= 0) {
-            this.healthPoints = healthPoints;
-        } else {
-            this.healthPoints = 0;
-        }
+        this.healthPoints = Math.max(0, healthPoints);
     }
 
     public PlayerState getPlayerState() {

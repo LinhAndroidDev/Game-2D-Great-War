@@ -53,4 +53,20 @@ public class GameDisplay {
                 (int) (gameCenterY + (double) heightPixels /2)
         );
     }
+
+    public double getGameCenterX() {
+        return gameCenterX;
+    }
+
+    public double getGameCenterY() {
+        return gameCenterY;
+    }
+
+    public int getWidthPixels() {
+        return widthPixels;
+    }
+
+    public int getHeightPixels() {
+        return heightPixels;
+    }
 }

@@ -15,12 +15,17 @@ import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
 import com.example.game2dgreatwar.map.Tile.TileType;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 public class Tilemap {
 
     private final MapLayout mapLayout;
     private final SpriteSheet spriteSheet;
     private final int[][] layout;
     private Bitmap mapBitmap;
+    private final List<TemporaryHazard> temporaryHazards = new ArrayList<>();
 
     public Tilemap(SpriteSheet spriteSheet) {
         mapLayout = new MapLayout();
@@ -75,11 +80,15 @@ public class Tilemap {
         return MAP_HEIGHT_PIXELS;
     }
 
+    public SpriteSheet getSpriteSheet() {
+        return spriteSheet;
+    }
+
     public TileType getTileTypeAt(double worldX, double worldY) {
         int col = (int) (worldX / TILE_WIDTH_PIXELS);
         int row = (int) (worldY / TILE_HEIGHT_PIXELS);
         if (row < 0 || row >= NUMBER_OF_ROW_TILES || col < 0 || col >= NUMBER_OF_COLUMN_TILES) {
-            return TileType.TREE_TILE; // treat out of map as solid
+            return TileType.TREE_TILE;
         }
         return TileType.values()[layout[row][col]];
     }
@@ -93,20 +102,65 @@ public class Tilemap {
     }
 
     public boolean isWalkableAt(double worldX, double worldY) {
-        return getTileTypeAt(worldX, worldY).isWalkable();
+        if (!getTileTypeAt(worldX, worldY).isWalkable()) {
+            return false;
+        }
+        for (TemporaryHazard hazard : temporaryHazards) {
+            if (hazard.circleIntersects(worldX, worldY, 1)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean circleIntersectsSolid(double centerX, double centerY, double radius) {
-        return circleIntersectsTileMatching(centerX, centerY, radius, true, false);
+        if (circleIntersectsTileMatching(centerX, centerY, radius, true, false)) {
+            return true;
+        }
+        for (TemporaryHazard hazard : temporaryHazards) {
+            if (hazard.isSolid() && hazard.circleIntersects(centerX, centerY, radius)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean circleIntersectsLava(double centerX, double centerY, double radius) {
-        return circleIntersectsTileMatching(centerX, centerY, radius, false, true);
+        if (circleIntersectsTileMatching(centerX, centerY, radius, false, true)) {
+            return true;
+        }
+        for (TemporaryHazard hazard : temporaryHazards) {
+            if (hazard.isLava() && hazard.circleIntersects(centerX, centerY, radius)) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    /**
-     * Finds a nearby walkable world position for item spawns. Returns null if none found.
-     */
+    public void addTemporaryHazard(TemporaryHazard hazard) {
+        if (hazard == null) {
+            return;
+        }
+        while (temporaryHazards.size() >= TemporaryHazard.MAX_HAZARDS) {
+            temporaryHazards.remove(0);
+        }
+        temporaryHazards.add(hazard);
+    }
+
+    public void clearTemporaryHazards() {
+        temporaryHazards.clear();
+    }
+
+    public void updateTemporaryHazards() {
+        long now = System.currentTimeMillis();
+        Iterator<TemporaryHazard> iterator = temporaryHazards.iterator();
+        while (iterator.hasNext()) {
+            if (iterator.next().isExpired(now)) {
+                iterator.remove();
+            }
+        }
+    }
+
     public double[] findNearestWalkablePosition(double worldX, double worldY) {
         if (isWalkableAt(worldX, worldY)
                 && worldX >= 0 && worldX < MAP_WIDTH_PIXELS
@@ -128,11 +182,10 @@ public class Tilemap {
                     if (row < 0 || row >= NUMBER_OF_ROW_TILES || col < 0 || col >= NUMBER_OF_COLUMN_TILES) {
                         continue;
                     }
-                    if (TileType.values()[layout[row][col]].isWalkable()) {
-                        return new double[]{
-                                col * TILE_WIDTH_PIXELS + TILE_WIDTH_PIXELS / 2.0,
-                                row * TILE_HEIGHT_PIXELS + TILE_HEIGHT_PIXELS / 2.0
-                        };
+                    double candidateX = col * TILE_WIDTH_PIXELS + TILE_WIDTH_PIXELS / 2.0;
+                    double candidateY = row * TILE_HEIGHT_PIXELS + TILE_HEIGHT_PIXELS / 2.0;
+                    if (isWalkableAt(candidateX, candidateY)) {
+                        return new double[]{candidateX, candidateY};
                     }
                 }
             }
@@ -206,5 +259,8 @@ public class Tilemap {
                 gameDisplay.DISPLAY_RECT,
                 null
         );
+        for (TemporaryHazard hazard : temporaryHazards) {
+            hazard.draw(canvas, gameDisplay, spriteSheet);
+        }
     }
 }

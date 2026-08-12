@@ -24,6 +24,14 @@ public abstract class GameObject {
     public double getPositionX() { return positionX; }
     public double getPositionY() { return positionY; }
 
+    public void setPosition(double positionX, double positionY) {
+        this.positionX = positionX;
+        this.positionY = positionY;
+    }
+
+    public double getVelocityX() { return velocityX; }
+    public double getVelocityY() { return velocityY; }
+
     public double getDirectionX() { return directionX; }
     public double getDirectionY() { return directionY; }
 

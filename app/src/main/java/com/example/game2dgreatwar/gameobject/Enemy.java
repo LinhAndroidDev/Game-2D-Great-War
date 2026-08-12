@@ -10,102 +10,379 @@ import androidx.core.content.ContextCompat;
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.GameLoop;
 import com.example.game2dgreatwar.R;
+import com.example.game2dgreatwar.gamepanel.EntityHealthBar;
+import com.example.game2dgreatwar.map.MapLayout;
+import com.example.game2dgreatwar.map.TemporaryHazard;
+import com.example.game2dgreatwar.map.Tilemap;
 
-import java.util.Random;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Enemy is a character which always moves in the direction of the player.
- * The Enemy class is an extension of a Circle, which is an extension of a GameObject
+ * Enemy character with typed abilities, HP and optional boss scaling.
  */
 public class Enemy extends Circle {
 
-    private static final double SPEED_PIXELS_PER_SECOND = Player.SPEED_PIXELS_PER_SECOND*0.6;
-    private static final double MAX_SPEED = SPEED_PIXELS_PER_SECOND / GameLoop.MAX_UPS;
+    private static final double BASE_SPEED_PIXELS_PER_SECOND = Player.SPEED_PIXELS_PER_SECOND * 0.6;
     private static final double SPAWNS_PER_MINUTE = 20;
-    private static final double SPAWNS_PER_SECOND = SPAWNS_PER_MINUTE/60.0;
-    private static final double UPDATES_PER_SPAWN = GameLoop.MAX_UPS/SPAWNS_PER_SECOND;
+    private static final double SPAWNS_PER_SECOND = SPAWNS_PER_MINUTE / 60.0;
+    private static final double UPDATES_PER_SPAWN = GameLoop.MAX_UPS / SPAWNS_PER_SECOND;
     private static double updatesUntilNextSpawn = UPDATES_PER_SPAWN;
+
+    private static final double NORMAL_RADIUS = 40;
+    private static final int NORMAL_BITMAP_SIZE = 80;
+    private static final long ABILITY_INTERVAL_MS = 3000L;
+    private static final long BLINK_INTERVAL_MS = 1000L;
+
     private final Player player;
-    private Bitmap bitmap;
+    private final EnemyType type;
+    private final EnemyRole role;
+    private final Bitmap bitmap;
+    private final EntityHealthBar healthBar;
 
-    public Enemy(Context context, Player player, double positionX, double positionY, double radius) {
-        super(context, ContextCompat.getColor(context, R.color.enemy), positionX, positionY, radius);
-        this.player = player;
-    }
+    private int healthPoints;
+    private final int maxHealthPoints;
+    private final double maxSpeed;
 
-    /**
-     * Enemy is an overload constructor used for spawning enemies in random locations
-     * @param context
-     * @param player
-     */
-    public Enemy(Context context, Player player) {
+    private boolean visible = true;
+    private long lastBlinkToggleMs;
+    private long lastAbilityMs;
+    private boolean reflectReady = true;
+    private long lastReflectWindowMs;
+
+    private Enemy(
+            Context context,
+            Player player,
+            EnemyType type,
+            EnemyRole role,
+            double positionX,
+            double positionY,
+            int maxHealthPoints,
+            double speedMultiplier
+    ) {
         super(
-            context,
-            ContextCompat.getColor(context, R.color.enemy),
-   Math.random()*1000,
-   Math.random()*1000,
-     60
+                context,
+                ContextCompat.getColor(context, R.color.enemy),
+                positionX,
+                positionY,
+                role == EnemyRole.BOSS ? NORMAL_RADIUS * 5 : NORMAL_RADIUS
         );
         this.player = player;
-        int[] resArray = { R.drawable.ic_ghost_white, R.drawable.ic_ghost_blue, R.drawable.ic_ghost_scary, R.drawable.ic_bat};
-        int randomResId = resArray[new Random().nextInt(4)];
-        bitmap = BitmapFactory.decodeResource(context.getResources(), randomResId);
-        bitmap = Bitmap.createScaledBitmap(bitmap, 80, 80, true);
+        this.type = type;
+        this.role = role;
+        this.maxHealthPoints = maxHealthPoints;
+        this.healthPoints = maxHealthPoints;
+        this.maxSpeed = (BASE_SPEED_PIXELS_PER_SECOND * speedMultiplier) / GameLoop.MAX_UPS;
+        this.healthBar = new EntityHealthBar(
+                context,
+                role == EnemyRole.BOSS ? 180 : 90,
+                role == EnemyRole.BOSS ? 24 : 16,
+                role == EnemyRole.BOSS ? 90 : 40
+        );
+
+        int drawable = drawableForType(type);
+        Bitmap raw = BitmapFactory.decodeResource(context.getResources(), drawable);
+        int size = role == EnemyRole.BOSS ? NORMAL_BITMAP_SIZE * 5 : NORMAL_BITMAP_SIZE;
+        this.bitmap = Bitmap.createScaledBitmap(raw, size, size, true);
+
+        long now = System.currentTimeMillis();
+        this.lastBlinkToggleMs = now;
+        this.lastAbilityMs = now;
+        this.lastReflectWindowMs = now;
     }
 
-    /**
-     * readyToSpawn checks if a new enemy should spawn, according to the decided number of spawns
-     * per minute (see SPAWNS_PER_MINUTE at top)
-     * @return
-     */
+    public static Enemy createNormal(Context context, Player player, EnemyType type) {
+        double speedMultiplier = speedMultiplierFor(type, EnemyRole.NORMAL);
+        return new Enemy(
+                context,
+                player,
+                type,
+                EnemyRole.NORMAL,
+                Math.random() * MapLayout.MAP_WIDTH_PIXELS,
+                Math.random() * MapLayout.MAP_HEIGHT_PIXELS,
+                normalMaxHpFor(type),
+                speedMultiplier
+        );
+    }
+
+    public static Enemy createBoss(
+            Context context,
+            Player player,
+            EnemyType type,
+            double positionX,
+            double positionY,
+            int maxHealth
+    ) {
+        double speedMultiplier = speedMultiplierFor(type, EnemyRole.BOSS);
+        return new Enemy(
+                context,
+                player,
+                type,
+                EnemyRole.BOSS,
+                positionX,
+                positionY,
+                maxHealth,
+                speedMultiplier
+        );
+    }
+
+    private static double speedMultiplierFor(EnemyType type, EnemyRole role) {
+        if (type == EnemyType.WHITE) {
+            return 0.75;
+        }
+        if (type == EnemyType.BAT) {
+            return 1.2;
+        }
+        return 1.0;
+    }
+
+    private static int normalMaxHpFor(EnemyType type) {
+        switch (type) {
+            case WHITE:
+                return 1;
+            case SCARY:
+                return 2;
+            case BLUE:
+            case BAT:
+            default:
+                return 3;
+        }
+    }
+
+    private static int drawableForType(EnemyType type) {
+        switch (type) {
+            case WHITE:
+                return R.drawable.ic_ghost_white;
+            case SCARY:
+                return R.drawable.ic_ghost_scary;
+            case BLUE:
+                return R.drawable.ic_ghost_blue;
+            case BAT:
+            default:
+                return R.drawable.ic_bat;
+        }
+    }
+
     public static boolean readyToSpawn() {
         if (updatesUntilNextSpawn <= 0) {
             updatesUntilNextSpawn += UPDATES_PER_SPAWN;
             return true;
-        } else {
-            updatesUntilNextSpawn --;
+        }
+        updatesUntilNextSpawn--;
+        return false;
+    }
+
+    public static void resetSpawnTimer() {
+        updatesUntilNextSpawn = UPDATES_PER_SPAWN;
+    }
+
+    public EnemyType getType() {
+        return type;
+    }
+
+    public EnemyRole getRole() {
+        return role;
+    }
+
+    public boolean isBoss() {
+        return role == EnemyRole.BOSS;
+    }
+
+    public boolean isVisible() {
+        return visible;
+    }
+
+    public boolean canTakeDamage() {
+        return visible;
+    }
+
+    public boolean canDealContactDamage() {
+        return visible;
+    }
+
+    public int getHealthPoints() {
+        return healthPoints;
+    }
+
+    public int getMaxHealthPoints() {
+        return maxHealthPoints;
+    }
+
+    public void takeDamage(int amount) {
+        if (!canTakeDamage()) {
+            return;
+        }
+        healthPoints = Math.max(0, healthPoints - amount);
+    }
+
+    public boolean isDead() {
+        return healthPoints <= 0;
+    }
+
+    /**
+     * Bat boss reflect: first player spell in each 3s window is reflected.
+     */
+    public boolean tryConsumeReflect() {
+        if (!isBoss() || type != EnemyType.BAT) {
             return false;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastReflectWindowMs >= ABILITY_INTERVAL_MS) {
+            reflectReady = true;
+            lastReflectWindowMs = now;
+        }
+        if (!reflectReady) {
+            return false;
+        }
+        reflectReady = false;
+        return true;
+    }
+
+    public int getShotDirectionCount() {
+        if (isBoss()) {
+            switch (type) {
+                case WHITE:
+                    return 10;
+                case SCARY:
+                    return 15;
+                case BLUE:
+                    return 6;
+                case BAT:
+                default:
+                    return 10;
+            }
+        }
+        if (type == EnemyType.WHITE) {
+            return 4;
+        }
+        return 0;
+    }
+
+    public boolean shotsBounce() {
+        return isBoss() && type == EnemyType.BLUE;
+    }
+
+    @Override
+    public void update() {
+        updateBlinkState();
+        chasePlayer();
+    }
+
+    private void updateBlinkState() {
+        if (type != EnemyType.SCARY || isBoss()) {
+            visible = true;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastBlinkToggleMs >= BLINK_INTERVAL_MS) {
+            visible = !visible;
+            lastBlinkToggleMs = now;
         }
     }
 
-    public void update() {
-        // =========================================================================================
-        //   Update velocity of the enemy so that the velocity is in the direction of the player
-        // =========================================================================================
-        // Calculate vector from enemy to player (in x and y)
+    private void chasePlayer() {
         double distanceToPlayerX = player.getPositionX() - positionX;
         double distanceToPlayerY = player.getPositionY() - positionY;
-
-        // Calculate (absolute) distance between enemy (this) and player
         double distanceToPlayer = GameObject.getDistanceBetweenObjects(this, player);
 
-        // Calculate direction from enemy to player
-        double directionX = distanceToPlayerX/distanceToPlayer;
-        double directionY = distanceToPlayerY/distanceToPlayer;
-
-        // Set velocity in the direction to the player
-        if(distanceToPlayer > 0) { // Avoid division by zero
-            velocityX = directionX*MAX_SPEED;
-            velocityY = directionY*MAX_SPEED;
+        if (distanceToPlayer > 0) {
+            velocityX = (distanceToPlayerX / distanceToPlayer) * maxSpeed;
+            velocityY = (distanceToPlayerY / distanceToPlayer) * maxSpeed;
         } else {
             velocityX = 0;
             velocityY = 0;
         }
 
-        // =========================================================================================
-        //   Update position of the enemy
-        // =========================================================================================
         positionX += velocityX;
         positionY += velocityY;
     }
 
-    public void drawEnemy(Canvas canvas, GameDisplay gameDisplay) {
-        canvas.drawBitmap(
-                bitmap,
-                (float) gameDisplay.gameToDisplayCoordinatesX(positionX),
-                (float) gameDisplay.gameToDisplayCoordinatesY(positionY),
-                null
+    public List<EnemyProjectile> tryShoot(Context context) {
+        List<EnemyProjectile> shots = new ArrayList<>();
+        int directions = getShotDirectionCount();
+        if (directions <= 0) {
+            return shots;
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastAbilityMs < ABILITY_INTERVAL_MS) {
+            return shots;
+        }
+        // For types that both shoot and place hazards, share the same timer cadence.
+        if (type == EnemyType.BLUE && !isBoss()) {
+            return shots;
+        }
+        if (type == EnemyType.BAT && !isBoss()) {
+            return shots;
+        }
+
+        lastAbilityMs = now;
+        boolean bounce = shotsBounce();
+        for (int i = 0; i < directions; i++) {
+            double angle = (Math.PI * 2 * i) / directions;
+            shots.add(new EnemyProjectile(
+                    context,
+                    positionX,
+                    positionY,
+                    Math.cos(angle),
+                    Math.sin(angle),
+                    bounce
+            ));
+        }
+        return shots;
+    }
+
+    public TemporaryHazard tryPlaceHazard(Tilemap tilemap, Player player) {
+        boolean placesWater = type == EnemyType.BLUE && !isBoss();
+        boolean placesLava = type == EnemyType.BAT && !isBoss();
+        if (!placesWater && !placesLava) {
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastAbilityMs < ABILITY_INTERVAL_MS) {
+            return null;
+        }
+
+        TemporaryHazard.Type hazardType = placesLava
+                ? TemporaryHazard.Type.LAVA
+                : TemporaryHazard.Type.WATER;
+
+        int tileSize = Math.random() < 0.5 ? 1 : 2;
+        int col = (int) (positionX / MapLayout.TILE_WIDTH_PIXELS);
+        int row = (int) (positionY / MapLayout.TILE_HEIGHT_PIXELS);
+        col += (int) (Math.random() * 3) - 1;
+        row += (int) (Math.random() * 3) - 1;
+        col = Math.max(0, Math.min(MapLayout.NUMBER_OF_COLUMN_TILES - tileSize, col));
+        row = Math.max(0, Math.min(MapLayout.NUMBER_OF_ROW_TILES - tileSize, row));
+
+        TemporaryHazard hazard = new TemporaryHazard(
+                hazardType,
+                col,
+                row,
+                tileSize,
+                tileSize,
+                now + TemporaryHazard.TTL_MS
         );
+
+        if (hazard.circleIntersects(player.getPositionX(), player.getPositionY(), player.getRadius())) {
+            return null;
+        }
+        lastAbilityMs = now;
+        return hazard;
+    }
+
+    public void drawEnemy(Canvas canvas, GameDisplay gameDisplay) {
+        if (!visible) {
+            return;
+        }
+        float left = (float) gameDisplay.gameToDisplayCoordinatesX(positionX) - bitmap.getWidth() / 2f;
+        float top = (float) gameDisplay.gameToDisplayCoordinatesY(positionY) - bitmap.getHeight() / 2f;
+        canvas.drawBitmap(bitmap, left, top, null);
+        healthBar.draw(canvas, gameDisplay, positionX, positionY, healthPoints, maxHealthPoints);
+    }
+
+    @Override
+    public void draw(Canvas canvas, GameDisplay gameDisplay) {
+        drawEnemy(canvas, gameDisplay);
     }
 }
-
