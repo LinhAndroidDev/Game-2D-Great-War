@@ -23,6 +23,7 @@ import com.example.game2dgreatwar.gamepanel.Joystick;
 import com.example.game2dgreatwar.gamepanel.Performance;
 import com.example.game2dgreatwar.graphics.Animator;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
+import com.example.game2dgreatwar.map.MapLayout;
 import com.example.game2dgreatwar.map.Tilemap;
 
 import java.util.ArrayList;
@@ -99,16 +100,23 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         joystick = new Joystick(0, 0, 1, 1);
         joystick.layoutForScreen(displayMetrics.widthPixels, displayMetrics.heightPixels);
 
-        // Initialize game objects
+        // Initialize tilemap before player so collision/bounds are available
         SpriteSheet spriteSheet = new SpriteSheet(context);
+        tilemap = new Tilemap(spriteSheet);
+
         Animator animator = new Animator(spriteSheet.getPlayerSpriteArray());
-        player = new Player(context, joystick, 2*500, 500, 32, animator);
+        player = new Player(
+                context,
+                joystick,
+                MapLayout.PLAYER_SPAWN_X,
+                MapLayout.PLAYER_SPAWN_Y,
+                32,
+                animator,
+                tilemap
+        );
 
         // Initialize display and center it around the player
         gameDisplay = new GameDisplay(displayMetrics.widthPixels, displayMetrics.heightPixels, player);
-
-        // Initialize Tilemap
-        tilemap = new Tilemap(spriteSheet);
 
         setFocusable(true);
     }
@@ -242,6 +250,19 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             spell.update();
         }
 
+        // Remove spells that hit solid tiles or leave the map
+        Iterator<Spell> iteratorSpellTile = spellList.iterator();
+        while (iteratorSpellTile.hasNext()) {
+            Spell spell = iteratorSpellTile.next();
+            if (isSpellOutOfBounds(spell)
+                    || tilemap.circleIntersectsSolid(
+                    spell.getPositionX(),
+                    spell.getPositionY(),
+                    spell.getRadius())) {
+                iteratorSpellTile.remove();
+            }
+        }
+
         // Iterate through enemyList and Check for collision between each enemy and the player and
         // spells in spellList.
         Iterator<Enemy> iteratorEnemy = enemyList.iterator();
@@ -271,17 +292,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
                         // If 5 enemies are destroyed, generate random reward
                         if (numberOfEnemiesKilled == 5) {
                             int randomValue = (int) (Math.random() * 2);
-                            switch (Award.of(randomValue)) {
-                                case COIN:
-                                    // Add coin to the game
-                                    coinList.add(new Coin(getContext(), enemy.getPositionX(), enemy.getPositionY()));
-                                    Utils.addSound(getContext(), R.raw.sound_coin_appear);
-                                    break;
-                                case HEALTH:
-                                    // Add health to the game
-                                    healthList.add(new Health(getContext(), enemy.getPositionX(), enemy.getPositionY()));
-                                    break;
-                            }
+                            spawnAwardAt(Award.of(randomValue), enemy.getPositionX(), enemy.getPositionY());
                             numberOfEnemiesKilled = 0;
                         }
                     }
@@ -334,5 +345,31 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         numberOfEnemiesKilled = 0;
         numberOfSpellsToCast = 0;
         isGameOver = false;
+    }
+
+    private boolean isSpellOutOfBounds(Spell spell) {
+        double x = spell.getPositionX();
+        double y = spell.getPositionY();
+        return x < 0
+                || y < 0
+                || x > tilemap.getMapWidthPixels()
+                || y > tilemap.getMapHeightPixels();
+    }
+
+    private void spawnAwardAt(Award award, double worldX, double worldY) {
+        double[] walkablePosition = tilemap.findNearestWalkablePosition(worldX, worldY);
+        if (walkablePosition == null) {
+            return;
+        }
+
+        switch (award) {
+            case COIN:
+                coinList.add(new Coin(getContext(), walkablePosition[0], walkablePosition[1]));
+                Utils.addSound(getContext(), R.raw.sound_coin_appear);
+                break;
+            case HEALTH:
+                healthList.add(new Health(getContext(), walkablePosition[0], walkablePosition[1]));
+                break;
+        }
     }
 }

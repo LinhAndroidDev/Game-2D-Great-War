@@ -1,5 +1,7 @@
 package com.example.game2dgreatwar.map;
 
+import static com.example.game2dgreatwar.map.MapLayout.MAP_HEIGHT_PIXELS;
+import static com.example.game2dgreatwar.map.MapLayout.MAP_WIDTH_PIXELS;
 import static com.example.game2dgreatwar.map.MapLayout.NUMBER_OF_COLUMN_TILES;
 import static com.example.game2dgreatwar.map.MapLayout.NUMBER_OF_ROW_TILES;
 import static com.example.game2dgreatwar.map.MapLayout.TILE_HEIGHT_PIXELS;
@@ -11,21 +13,23 @@ import android.graphics.Rect;
 
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
+import com.example.game2dgreatwar.map.Tile.TileType;
 
 public class Tilemap {
 
     private final MapLayout mapLayout;
     private final SpriteSheet spriteSheet;
+    private final int[][] layout;
     private Bitmap mapBitmap;
 
     public Tilemap(SpriteSheet spriteSheet) {
         mapLayout = new MapLayout();
         this.spriteSheet = spriteSheet;
+        this.layout = mapLayout.getLayout();
         initializeTilemap();
     }
 
     private void initializeTilemap() {
-        int[][] layout = mapLayout.getLayout();
         Tile[][] tilemap = new Tile[NUMBER_OF_ROW_TILES][NUMBER_OF_COLUMN_TILES];
         for (int iRow = 0; iRow < NUMBER_OF_ROW_TILES; iRow++) {
             for (int iCol = 0; iCol < NUMBER_OF_COLUMN_TILES; iCol++) {
@@ -61,6 +65,138 @@ public class Tilemap {
                 (idxCol + 1)*TILE_WIDTH_PIXELS,
                 (idxRow + 1)*TILE_HEIGHT_PIXELS
         );
+    }
+
+    public int getMapWidthPixels() {
+        return MAP_WIDTH_PIXELS;
+    }
+
+    public int getMapHeightPixels() {
+        return MAP_HEIGHT_PIXELS;
+    }
+
+    public TileType getTileTypeAt(double worldX, double worldY) {
+        int col = (int) (worldX / TILE_WIDTH_PIXELS);
+        int row = (int) (worldY / TILE_HEIGHT_PIXELS);
+        if (row < 0 || row >= NUMBER_OF_ROW_TILES || col < 0 || col >= NUMBER_OF_COLUMN_TILES) {
+            return TileType.TREE_TILE; // treat out of map as solid
+        }
+        return TileType.values()[layout[row][col]];
+    }
+
+    public boolean isSolidAt(double worldX, double worldY) {
+        return getTileTypeAt(worldX, worldY).isSolid();
+    }
+
+    public boolean isLavaAt(double worldX, double worldY) {
+        return getTileTypeAt(worldX, worldY).isLava();
+    }
+
+    public boolean isWalkableAt(double worldX, double worldY) {
+        return getTileTypeAt(worldX, worldY).isWalkable();
+    }
+
+    public boolean circleIntersectsSolid(double centerX, double centerY, double radius) {
+        return circleIntersectsTileMatching(centerX, centerY, radius, true, false);
+    }
+
+    public boolean circleIntersectsLava(double centerX, double centerY, double radius) {
+        return circleIntersectsTileMatching(centerX, centerY, radius, false, true);
+    }
+
+    /**
+     * Finds a nearby walkable world position for item spawns. Returns null if none found.
+     */
+    public double[] findNearestWalkablePosition(double worldX, double worldY) {
+        if (isWalkableAt(worldX, worldY)
+                && worldX >= 0 && worldX < MAP_WIDTH_PIXELS
+                && worldY >= 0 && worldY < MAP_HEIGHT_PIXELS) {
+            return new double[]{worldX, worldY};
+        }
+
+        int originCol = clamp((int) (worldX / TILE_WIDTH_PIXELS), 0, NUMBER_OF_COLUMN_TILES - 1);
+        int originRow = clamp((int) (worldY / TILE_HEIGHT_PIXELS), 0, NUMBER_OF_ROW_TILES - 1);
+
+        for (int radius = 1; radius <= 8; radius++) {
+            for (int dRow = -radius; dRow <= radius; dRow++) {
+                for (int dCol = -radius; dCol <= radius; dCol++) {
+                    if (Math.abs(dRow) != radius && Math.abs(dCol) != radius) {
+                        continue;
+                    }
+                    int row = originRow + dRow;
+                    int col = originCol + dCol;
+                    if (row < 0 || row >= NUMBER_OF_ROW_TILES || col < 0 || col >= NUMBER_OF_COLUMN_TILES) {
+                        continue;
+                    }
+                    if (TileType.values()[layout[row][col]].isWalkable()) {
+                        return new double[]{
+                                col * TILE_WIDTH_PIXELS + TILE_WIDTH_PIXELS / 2.0,
+                                row * TILE_HEIGHT_PIXELS + TILE_HEIGHT_PIXELS / 2.0
+                        };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean circleIntersectsTileMatching(
+            double centerX,
+            double centerY,
+            double radius,
+            boolean matchSolid,
+            boolean matchLava
+    ) {
+        int minCol = (int) Math.floor((centerX - radius) / TILE_WIDTH_PIXELS);
+        int maxCol = (int) Math.floor((centerX + radius) / TILE_WIDTH_PIXELS);
+        int minRow = (int) Math.floor((centerY - radius) / TILE_HEIGHT_PIXELS);
+        int maxRow = (int) Math.floor((centerY + radius) / TILE_HEIGHT_PIXELS);
+
+        for (int row = minRow; row <= maxRow; row++) {
+            for (int col = minCol; col <= maxCol; col++) {
+                if (row < 0 || row >= NUMBER_OF_ROW_TILES || col < 0 || col >= NUMBER_OF_COLUMN_TILES) {
+                    if (matchSolid) {
+                        return true;
+                    }
+                    continue;
+                }
+
+                TileType type = TileType.values()[layout[row][col]];
+                boolean matches = (matchSolid && type.isSolid()) || (matchLava && type.isLava());
+                if (!matches) {
+                    continue;
+                }
+
+                double tileLeft = col * TILE_WIDTH_PIXELS;
+                double tileTop = row * TILE_HEIGHT_PIXELS;
+                double tileRight = tileLeft + TILE_WIDTH_PIXELS;
+                double tileBottom = tileTop + TILE_HEIGHT_PIXELS;
+
+                if (circleIntersectsRect(centerX, centerY, radius, tileLeft, tileTop, tileRight, tileBottom)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean circleIntersectsRect(
+            double cx, double cy, double radius,
+            double left, double top, double right, double bottom
+    ) {
+        double closestX = clamp(cx, left, right);
+        double closestY = clamp(cy, top, bottom);
+        double dx = cx - closestX;
+        double dy = cy - closestY;
+        return dx * dx + dy * dy < radius * radius;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     public void draw(Canvas canvas, GameDisplay gameDisplay) {

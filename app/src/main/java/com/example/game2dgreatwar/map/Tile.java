@@ -18,7 +18,19 @@ abstract class Tile {
         LAVA_TILE,
         GROUND_TILE,
         GRASS_TILE,
-        TREE_TILE
+        TREE_TILE;
+
+        public boolean isSolid() {
+            return this == WATER_TILE || this == LAVA_TILE || this == TREE_TILE;
+        }
+
+        public boolean isLava() {
+            return this == LAVA_TILE;
+        }
+
+        public boolean isWalkable() {
+            return !isSolid();
+        }
     }
 
     public static Tile getTile(int idxTileType, SpriteSheet spriteSheet, Rect mapLocationRect) {
