@@ -2,6 +2,9 @@ package com.example.game2dgreatwar;
 
 import com.example.game2dgreatwar.gameobject.EnemyType;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * Tracks level progression, kill thresholds and boss-fight state.
  */
@@ -122,6 +125,22 @@ public class LevelController {
         level++;
         kills = 0;
         return false;
+    }
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("level", level);
+        json.put("kills", kills);
+        json.put("bossFight", bossFight);
+        json.put("victory", victory);
+        return json;
+    }
+
+    public void restoreFromJson(JSONObject json) throws JSONException {
+        level = Math.max(1, Math.min(MAX_LEVEL, json.getInt("level")));
+        kills = Math.max(0, json.getInt("kills"));
+        bossFight = json.getBoolean("bossFight");
+        victory = json.getBoolean("victory");
     }
 
     public void reset() {

@@ -20,4 +20,14 @@ public final class GameClock {
     public static void tick() {
         nowMs += MS_PER_UPDATE;
     }
+
+    /** Converts a clock timestamp to an offset from now, for storing in a save game. */
+    public static long toOffset(long timestampMs) {
+        return timestampMs - nowMs;
+    }
+
+    /** Converts an offset read from a save game back to a timestamp on the current clock. */
+    public static long fromOffset(long offsetMs) {
+        return nowMs + offsetMs;
+    }
 }

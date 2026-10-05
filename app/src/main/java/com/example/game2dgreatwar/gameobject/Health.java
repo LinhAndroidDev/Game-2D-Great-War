@@ -8,6 +8,9 @@ import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.R;
 import com.example.game2dgreatwar.graphics.BitmapCache;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 public class Health {
     private double positionX;
     private double positionY;
@@ -20,6 +23,17 @@ public class Health {
         this.positionX = positionX;
         this.positionY = positionY;
         this.bitmap = BitmapCache.get(context, R.drawable.ic_health, BITMAP_SIZE);
+    }
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("x", positionX);
+        json.put("y", positionY);
+        return json;
+    }
+
+    public static Health fromJson(Context context, JSONObject json) throws JSONException {
+        return new Health(context, json.getDouble("x"), json.getDouble("y"));
     }
 
     public static void preloadBitmaps(Context context) {

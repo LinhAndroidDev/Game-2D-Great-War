@@ -5,9 +5,13 @@ import static com.example.game2dgreatwar.map.MapLayout.TILE_WIDTH_PIXELS;
 
 import android.graphics.Canvas;
 
+import com.example.game2dgreatwar.GameClock;
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.graphics.Sprite;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class TemporaryHazard {
     public enum Type {
@@ -32,6 +36,29 @@ public class TemporaryHazard {
         this.tilesWide = Math.max(1, tilesWide);
         this.tilesHigh = Math.max(1, tilesHigh);
         this.expiresAtMs = expiresAtMs;
+    }
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("type", type.name());
+        json.put("col", tileCol);
+        json.put("row", tileRow);
+        json.put("tilesWide", tilesWide);
+        json.put("tilesHigh", tilesHigh);
+        // Stored as remaining lifetime so it keeps counting down from where it was
+        json.put("expiresOffsetMs", GameClock.toOffset(expiresAtMs));
+        return json;
+    }
+
+    public static TemporaryHazard fromJson(JSONObject json) throws JSONException {
+        return new TemporaryHazard(
+                Type.valueOf(json.getString("type")),
+                json.getInt("col"),
+                json.getInt("row"),
+                json.getInt("tilesWide"),
+                json.getInt("tilesHigh"),
+                GameClock.fromOffset(json.getLong("expiresOffsetMs"))
+        );
     }
 
     public Type getType() {

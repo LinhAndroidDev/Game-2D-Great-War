@@ -16,6 +16,9 @@ import com.example.game2dgreatwar.map.MapLayout;
 import com.example.game2dgreatwar.map.TemporaryHazard;
 import com.example.game2dgreatwar.map.Tilemap;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -185,6 +188,54 @@ public class Enemy extends Circle {
 
     public static void resetSpawnTimer() {
         updatesUntilNextSpawn = UPDATES_PER_SPAWN;
+    }
+
+    public static double getSpawnTimer() {
+        return updatesUntilNextSpawn;
+    }
+
+    public static void restoreSpawnTimer(double updates) {
+        updatesUntilNextSpawn = Math.max(0, Math.min(UPDATES_PER_SPAWN, updates));
+    }
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("type", type.name());
+        json.put("role", role.name());
+        json.put("x", positionX);
+        json.put("y", positionY);
+        json.put("hp", healthPoints);
+        json.put("maxHp", maxHealthPoints);
+        json.put("visible", visible);
+        json.put("reflectReady", reflectReady);
+        // Timers are stored relative to "now" so they keep their remaining time after loading
+        json.put("lastBlinkOffsetMs", GameClock.toOffset(lastBlinkToggleMs));
+        json.put("lastAbilityOffsetMs", GameClock.toOffset(lastAbilityMs));
+        json.put("lastReflectOffsetMs", GameClock.toOffset(lastReflectWindowMs));
+        return json;
+    }
+
+    public static Enemy fromJson(Context context, Player player, JSONObject json) throws JSONException {
+        EnemyType type = EnemyType.valueOf(json.getString("type"));
+        EnemyRole role = EnemyRole.valueOf(json.getString("role"));
+        int maxHealth = Math.max(1, json.getInt("maxHp"));
+        Enemy enemy = new Enemy(
+                context,
+                player,
+                type,
+                role,
+                json.getDouble("x"),
+                json.getDouble("y"),
+                maxHealth,
+                speedMultiplierFor(type, role)
+        );
+        enemy.healthPoints = Math.max(1, Math.min(maxHealth, json.getInt("hp")));
+        enemy.visible = json.getBoolean("visible");
+        enemy.reflectReady = json.getBoolean("reflectReady");
+        enemy.lastBlinkToggleMs = GameClock.fromOffset(json.getLong("lastBlinkOffsetMs"));
+        enemy.lastAbilityMs = GameClock.fromOffset(json.getLong("lastAbilityOffsetMs"));
+        enemy.lastReflectWindowMs = GameClock.fromOffset(json.getLong("lastReflectOffsetMs"));
+        return enemy;
     }
 
     public EnemyType getType() {

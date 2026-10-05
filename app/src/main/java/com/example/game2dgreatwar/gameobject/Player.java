@@ -15,6 +15,9 @@ import com.example.game2dgreatwar.gamepanel.Joystick;
 import com.example.game2dgreatwar.graphics.Animator;
 import com.example.game2dgreatwar.map.Tilemap;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * Player is the main character of the game, which the user can control with a touch joystick.
  */
@@ -142,6 +145,30 @@ public class Player extends Circle {
 
     public void setHealthPoint(int healthPoints) {
         this.healthPoints = Math.max(0, healthPoints);
+    }
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("x", positionX);
+        json.put("y", positionY);
+        json.put("hp", healthPoints);
+        json.put("directionX", directionX);
+        json.put("directionY", directionY);
+        // Timers are stored relative to "now" so they keep their remaining time after loading
+        json.put("iFrameOffsetMs", GameClock.toOffset(iFrameUntilMs));
+        json.put("lastLavaOffsetMs", GameClock.toOffset(lastLavaDamageTimeMs));
+        return json;
+    }
+
+    public void restoreFromJson(JSONObject json) throws JSONException {
+        setPositionSafe(json.getDouble("x"), json.getDouble("y"));
+        healthPoints = Math.max(1, Math.min(MAX_HEALTH_POINTS, json.getInt("hp")));
+        directionX = json.getDouble("directionX");
+        directionY = json.getDouble("directionY");
+        velocityX = 0;
+        velocityY = 0;
+        iFrameUntilMs = GameClock.fromOffset(json.getLong("iFrameOffsetMs"));
+        lastLavaDamageTimeMs = GameClock.fromOffset(json.getLong("lastLavaOffsetMs"));
     }
 
     public PlayerState getPlayerState() {

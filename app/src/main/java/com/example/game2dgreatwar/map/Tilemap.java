@@ -16,6 +16,10 @@ import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
 import com.example.game2dgreatwar.map.Tile.TileType;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -36,6 +40,17 @@ public class Tilemap {
     }
 
     private void initializeTilemap() {
+        Bitmap.Config config = Bitmap.Config.ARGB_8888;
+        mapBitmap = Bitmap.createBitmap(
+                NUMBER_OF_COLUMN_TILES*TILE_WIDTH_PIXELS,
+                NUMBER_OF_ROW_TILES*TILE_HEIGHT_PIXELS,
+                config
+        );
+        renderMapBitmap();
+    }
+
+    /** Pre-draws every tile of the current layout into the map bitmap. */
+    private void renderMapBitmap() {
         Tile[][] tilemap = new Tile[NUMBER_OF_ROW_TILES][NUMBER_OF_COLUMN_TILES];
         for (int iRow = 0; iRow < NUMBER_OF_ROW_TILES; iRow++) {
             for (int iCol = 0; iCol < NUMBER_OF_COLUMN_TILES; iCol++) {
@@ -47,13 +62,6 @@ public class Tilemap {
             }
         }
 
-        Bitmap.Config config = Bitmap.Config.ARGB_8888;
-        mapBitmap = Bitmap.createBitmap(
-                NUMBER_OF_COLUMN_TILES*TILE_WIDTH_PIXELS,
-                NUMBER_OF_ROW_TILES*TILE_HEIGHT_PIXELS,
-                config
-        );
-
         Canvas mapCanvas = new Canvas(mapBitmap);
 
         for (int iRow = 0; iRow < NUMBER_OF_ROW_TILES; iRow++) {
@@ -62,6 +70,61 @@ public class Tilemap {
             }
         }
 
+    }
+
+    public JSONObject toJson() throws JSONException {
+        // One digit per tile, row by row: compact and easy to validate
+        StringBuilder tiles = new StringBuilder(NUMBER_OF_ROW_TILES * NUMBER_OF_COLUMN_TILES);
+        for (int[] row : layout) {
+            for (int tile : row) {
+                tiles.append((char) ('0' + tile));
+            }
+        }
+
+        JSONArray hazards = new JSONArray();
+        for (TemporaryHazard hazard : temporaryHazards) {
+            hazards.put(hazard.toJson());
+        }
+
+        JSONObject json = new JSONObject();
+        json.put("rows", NUMBER_OF_ROW_TILES);
+        json.put("cols", NUMBER_OF_COLUMN_TILES);
+        json.put("tiles", tiles.toString());
+        json.put("hazards", hazards);
+        return json;
+    }
+
+    public void restoreFromJson(JSONObject json) throws JSONException {
+        String tiles = json.getString("tiles");
+        if (json.getInt("rows") != NUMBER_OF_ROW_TILES
+                || json.getInt("cols") != NUMBER_OF_COLUMN_TILES
+                || tiles.length() != NUMBER_OF_ROW_TILES * NUMBER_OF_COLUMN_TILES) {
+            throw new JSONException("Saved map size does not match");
+        }
+
+        int tileTypeCount = TileType.values().length;
+        int[][] restored = new int[NUMBER_OF_ROW_TILES][NUMBER_OF_COLUMN_TILES];
+        for (int i = 0; i < tiles.length(); i++) {
+            int tile = tiles.charAt(i) - '0';
+            if (tile < 0 || tile >= tileTypeCount) {
+                throw new JSONException("Invalid tile in saved map: " + tiles.charAt(i));
+            }
+            restored[i / NUMBER_OF_COLUMN_TILES][i % NUMBER_OF_COLUMN_TILES] = tile;
+        }
+
+        List<TemporaryHazard> restoredHazards = new ArrayList<>();
+        JSONArray hazards = json.getJSONArray("hazards");
+        for (int i = 0; i < hazards.length(); i++) {
+            restoredHazards.add(TemporaryHazard.fromJson(hazards.getJSONObject(i)));
+        }
+
+        // Everything parsed fine: apply it
+        for (int row = 0; row < NUMBER_OF_ROW_TILES; row++) {
+            System.arraycopy(restored[row], 0, layout[row], 0, NUMBER_OF_COLUMN_TILES);
+        }
+        renderMapBitmap();
+        temporaryHazards.clear();
+        temporaryHazards.addAll(restoredHazards);
     }
 
     private Rect getRectByIndex(int idxRow, int idxCol) {

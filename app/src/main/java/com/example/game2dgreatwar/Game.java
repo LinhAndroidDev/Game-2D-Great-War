@@ -30,6 +30,10 @@ import com.example.game2dgreatwar.map.MapLayout;
 import com.example.game2dgreatwar.map.TemporaryHazard;
 import com.example.game2dgreatwar.map.Tilemap;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -61,7 +65,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     GameOverListener gameOverListener;
     VictoryListener victoryListener;
-    LevelChangedListener levelChangedListener;
     PauseStateListener pauseStateListener;
     private boolean isGameOver = false;
     private volatile boolean isPaused = false;
@@ -97,10 +100,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     interface VictoryListener {
         void onVictory();
-    }
-
-    interface LevelChangedListener {
-        void onLevelChanged(int level);
     }
 
     interface PauseStateListener {
@@ -208,7 +207,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     @Override
-    public void draw(Canvas canvas) {
+    public synchronized void draw(Canvas canvas) {
         super.draw(canvas);
 
         tilemap.draw(canvas, gameDisplay);
@@ -235,7 +234,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         levelProgressPanel.draw(canvas, levelController, screenWidthPixels);
     }
 
-    public void update() {
+    // update/draw run on the game thread, saving runs on the UI thread: both lock on this Game
+    public synchronized void update() {
         if (isPaused) {
             return;
         }
@@ -500,9 +500,6 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         awardKillCounter = 0;
         Enemy.resetSpawnTimer();
-        if (levelChangedListener != null) {
-            levelChangedListener.onLevelChanged(levelController.getLevel());
-        }
     }
 
     private void collectPickups() {
@@ -562,7 +559,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         startAtLevel(1);
     }
 
-    public void startAtLevel(int level) {
+    public synchronized void startAtLevel(int level) {
         player.healFull();
         player.setPositionSafe(MapLayout.PLAYER_SPAWN_X, MapLayout.PLAYER_SPAWN_Y);
         enemyList.clear();
@@ -578,6 +575,118 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         Enemy.resetSpawnTimer();
         gameDisplay.update();
         resume();
+    }
+
+    /** A finished game (lost or won) can't be continued, so it isn't saved. */
+    public synchronized boolean canBeSaved() {
+        return !isGameOver && !levelController.isVictory();
+    }
+
+    public synchronized JSONObject createSaveState() throws JSONException {
+        JSONObject state = new JSONObject();
+        state.put("level", levelController.toJson());
+        state.put("map", tilemap.toJson());
+        state.put("player", player.toJson());
+        state.put("awardKillCounter", awardKillCounter);
+        state.put("spawnTimer", Enemy.getSpawnTimer());
+
+        JSONArray enemies = new JSONArray();
+        for (Enemy enemy : enemyList) {
+            enemies.put(enemy.toJson());
+        }
+        state.put("enemies", enemies);
+
+        JSONArray spells = new JSONArray();
+        for (Spell spell : spellList) {
+            spells.put(spell.toJson());
+        }
+        state.put("spells", spells);
+
+        JSONArray projectiles = new JSONArray();
+        for (EnemyProjectile projectile : enemyProjectileList) {
+            projectiles.put(projectile.toJson());
+        }
+        state.put("enemyProjectiles", projectiles);
+
+        JSONArray healths = new JSONArray();
+        for (Health health : healthList) {
+            healths.put(health.toJson());
+        }
+        state.put("healths", healths);
+
+        JSONArray coins = new JSONArray();
+        for (Coin coin : coinList) {
+            coins.put(coin.toJson());
+        }
+        state.put("coins", coins);
+        return state;
+    }
+
+    /**
+     * Loads a saved game. The game starts paused so the player can get ready first.
+     *
+     * @return false if the save is unusable; the current game is then left untouched
+     */
+    public synchronized boolean restoreSaveState(JSONObject state) {
+        Context context = getContext();
+        try {
+            // Parse everything first so a broken save can't leave the game half-loaded
+            List<Enemy> enemies = new ArrayList<>();
+            JSONArray enemiesJson = state.getJSONArray("enemies");
+            for (int i = 0; i < enemiesJson.length(); i++) {
+                enemies.add(Enemy.fromJson(context, player, enemiesJson.getJSONObject(i)));
+            }
+            List<Spell> spells = new ArrayList<>();
+            JSONArray spellsJson = state.getJSONArray("spells");
+            for (int i = 0; i < spellsJson.length(); i++) {
+                spells.add(Spell.fromJson(context, spellsJson.getJSONObject(i)));
+            }
+            List<EnemyProjectile> projectiles = new ArrayList<>();
+            JSONArray projectilesJson = state.getJSONArray("enemyProjectiles");
+            for (int i = 0; i < projectilesJson.length(); i++) {
+                projectiles.add(EnemyProjectile.fromJson(context, projectilesJson.getJSONObject(i)));
+            }
+            List<Health> healths = new ArrayList<>();
+            JSONArray healthsJson = state.getJSONArray("healths");
+            for (int i = 0; i < healthsJson.length(); i++) {
+                healths.add(Health.fromJson(context, healthsJson.getJSONObject(i)));
+            }
+            List<Coin> coins = new ArrayList<>();
+            JSONArray coinsJson = state.getJSONArray("coins");
+            for (int i = 0; i < coinsJson.length(); i++) {
+                coins.add(Coin.fromJson(context, coinsJson.getJSONObject(i)));
+            }
+            JSONObject levelJson = state.getJSONObject("level");
+            JSONObject playerJson = state.getJSONObject("player");
+            int restoredAwardKillCounter = state.getInt("awardKillCounter");
+            double spawnTimer = state.getDouble("spawnTimer");
+
+            tilemap.restoreFromJson(state.getJSONObject("map"));
+            levelController.restoreFromJson(levelJson);
+            player.restoreFromJson(playerJson);
+
+            enemyList.clear();
+            enemyList.addAll(enemies);
+            spellList.clear();
+            spellList.addAll(spells);
+            enemyProjectileList.clear();
+            enemyProjectileList.addAll(projectiles);
+            healthList.clear();
+            healthList.addAll(healths);
+            coinList.clear();
+            coinList.addAll(coins);
+
+            awardKillCounter = restoredAwardKillCounter;
+            Enemy.restoreSpawnTimer(spawnTimer);
+            numberOfSpellsToCast = 0;
+            isGameOver = false;
+            gameDisplay.update();
+            pause();
+            return true;
+        } catch (JSONException | IllegalArgumentException e) {
+            Log.e("Game.java", "Could not restore saved game", e);
+            return false;
+        }
     }
 
     public int getCurrentLevel() {

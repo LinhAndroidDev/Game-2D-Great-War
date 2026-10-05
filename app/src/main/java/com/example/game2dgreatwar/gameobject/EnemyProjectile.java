@@ -10,6 +10,9 @@ import com.example.game2dgreatwar.GameLoop;
 import com.example.game2dgreatwar.R;
 import com.example.game2dgreatwar.map.Tilemap;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 public class EnemyProjectile extends Circle {
     public static final double SPEED_PIXELS_PER_SECOND = 500.0;
     private static final double MAX_SPEED = SPEED_PIXELS_PER_SECOND / GameLoop.MAX_UPS;
@@ -39,6 +42,28 @@ public class EnemyProjectile extends Circle {
         this.velocityX = (directionX / length) * MAX_SPEED;
         this.velocityY = (directionY / length) * MAX_SPEED;
         this.bounces = bounces;
+    }
+
+    public JSONObject toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("x", positionX);
+        json.put("y", positionY);
+        json.put("vx", velocityX);
+        json.put("vy", velocityY);
+        json.put("bounces", bounces);
+        return json;
+    }
+
+    public static EnemyProjectile fromJson(Context context, JSONObject json) throws JSONException {
+        // The constructor normalizes the direction, so the saved velocity works as a direction
+        return new EnemyProjectile(
+                context,
+                json.getDouble("x"),
+                json.getDouble("y"),
+                json.getDouble("vx"),
+                json.getDouble("vy"),
+                json.getBoolean("bounces")
+        );
     }
 
     public boolean isBouncing() {
