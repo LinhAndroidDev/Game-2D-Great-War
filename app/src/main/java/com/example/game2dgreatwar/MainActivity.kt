@@ -6,6 +6,7 @@ import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import com.example.game2dgreatwar.databinding.ActivityMainBinding
 import com.example.game2dgreatwar.dialog.DialogGameOver
 import com.example.game2dgreatwar.dialog.DialogVictory
@@ -20,9 +21,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding?.root)
         setupLevelSpinner()
+        setupPause()
 
         binding?.gameView?.gameOverListener = Game.GameOverListener {
             runOnUiThread {
+                binding?.btnPause?.isVisible = false
                 val dialogGameOver = DialogGameOver()
                 dialogGameOver.setCancelable(false)
                 dialogGameOver.show(supportFragmentManager, "gameOver")
@@ -30,6 +33,7 @@ class MainActivity : AppCompatActivity() {
                     override fun onConfirm() {
                         binding?.gameView?.resetGame()
                         syncLevelSpinner(1)
+                        binding?.btnPause?.isVisible = true
                     }
                 }
             }
@@ -37,6 +41,7 @@ class MainActivity : AppCompatActivity() {
 
         binding?.gameView?.victoryListener = Game.VictoryListener {
             runOnUiThread {
+                binding?.btnPause?.isVisible = false
                 val dialogVictory = DialogVictory()
                 dialogVictory.setCancelable(false)
                 dialogVictory.show(supportFragmentManager, "victory")
@@ -44,6 +49,7 @@ class MainActivity : AppCompatActivity() {
                     override fun onConfirm() {
                         binding?.gameView?.resetGame()
                         syncLevelSpinner(1)
+                        binding?.btnPause?.isVisible = true
                     }
                 }
             }
@@ -54,6 +60,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         setUpFullScreen()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Freeze the game when leaving the app; the pause overlay waits for the player on return
+        binding?.gameView?.pause()
+    }
+
+    private fun setupPause() {
+        binding?.gameView?.pauseStateListener = Game.PauseStateListener { paused ->
+            runOnUiThread { binding?.layoutPause?.isVisible = paused }
+        }
+        binding?.btnPause?.setOnClickListener { binding?.gameView?.pause() }
+        binding?.btnResume?.setOnClickListener { binding?.gameView?.resume() }
+        binding?.btnRestart?.setOnClickListener {
+            binding?.gameView?.resetGame()
+            syncLevelSpinner(1)
+        }
     }
 
     private fun setupLevelSpinner() {

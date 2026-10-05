@@ -62,7 +62,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     GameOverListener gameOverListener;
     VictoryListener victoryListener;
     LevelChangedListener levelChangedListener;
+    PauseStateListener pauseStateListener;
     private boolean isGameOver = false;
+    private volatile boolean isPaused = false;
     private int awardKillCounter = 0;
 
     public enum Award {
@@ -101,14 +103,23 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         void onLevelChanged(int level);
     }
 
+    interface PauseStateListener {
+        void onPauseChanged(boolean paused);
+    }
+
     public Game(Context context, AttributeSet attrs) {
         super(context, attrs);
 
         SurfaceHolder surfaceHolder = getHolder();
         surfaceHolder.addCallback(this);
 
-        gameLoop = new GameLoop(this, surfaceHolder);
-        performance = new Performance(context, gameLoop);
+        performance = new Performance(context);
+
+        // Load sounds and images up front so nothing is decoded on the game thread mid-fight
+        SoundManager.init(context);
+        Enemy.preloadBitmaps(context);
+        Coin.preloadBitmaps(context);
+        Health.preloadBitmaps(context);
 
         DisplayMetrics displayMetrics = new DisplayMetrics();
         ((Activity) getContext()).getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
@@ -138,6 +149,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (isPaused) {
+            return true;
+        }
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
@@ -171,11 +185,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
         Log.d("Game.java", "surfaceCreated()");
-        if (gameLoop.getState().equals(Thread.State.TERMINATED)) {
-            SurfaceHolder surfaceHolder = getHolder();
-            surfaceHolder.addCallback(this);
-            gameLoop = new GameLoop(this, surfaceHolder);
-        }
+        // A Thread can only be started once, so every new surface gets a fresh loop
+        gameLoop = new GameLoop(this, holder);
         gameLoop.startLoop();
     }
 
@@ -189,6 +200,11 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
         Log.d("Game.java", "surfaceDestroyed()");
+        // Must stop drawing before this callback returns, the surface is gone afterwards
+        if (gameLoop != null) {
+            gameLoop.stopLoop();
+            gameLoop = null;
+        }
     }
 
     @Override
@@ -215,11 +231,16 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         joystick.draw(canvas);
-        performance.draw(canvas);
+        performance.draw(canvas, gameLoop);
         levelProgressPanel.draw(canvas, levelController, screenWidthPixels);
     }
 
     public void update() {
+        if (isPaused) {
+            return;
+        }
+        GameClock.tick();
+
         if (levelController.isVictory()) {
             return;
         }
@@ -507,6 +528,36 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
     }
 
+    public void pause() {
+        if (isPaused) {
+            return;
+        }
+        isPaused = true;
+        // Drop held input so the player doesn't keep running/shooting after resume
+        joystick.setIsPressed(false);
+        joystick.resetActuator();
+        numberOfSpellsToCast = 0;
+        notifyPauseChanged();
+    }
+
+    public void resume() {
+        if (!isPaused) {
+            return;
+        }
+        isPaused = false;
+        notifyPauseChanged();
+    }
+
+    public boolean isPaused() {
+        return isPaused;
+    }
+
+    private void notifyPauseChanged() {
+        if (pauseStateListener != null) {
+            pauseStateListener.onPauseChanged(isPaused);
+        }
+    }
+
     public void resetGame() {
         startAtLevel(1);
     }
@@ -526,6 +577,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         levelController.startAtLevel(level);
         Enemy.resetSpawnTimer();
         gameDisplay.update();
+        resume();
     }
 
     public int getCurrentLevel() {

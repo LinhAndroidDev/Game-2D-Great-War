@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 
 import androidx.core.content.ContextCompat;
 
+import com.example.game2dgreatwar.GameClock;
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.GameLoop;
 import com.example.game2dgreatwar.R;
@@ -31,7 +32,7 @@ public class Player extends Circle {
     private final Animator animator;
     private final PlayerState playerState;
     private final Tilemap tilemap;
-    private long lastLavaDamageTimeMs = 0L;
+    private long lastLavaDamageTimeMs = -LAVA_DAMAGE_COOLDOWN_MS;
     private long iFrameUntilMs = 0L;
 
     public Player(
@@ -93,7 +94,7 @@ public class Player extends Circle {
     }
 
     private void applyLavaDamage() {
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         if (now - lastLavaDamageTimeMs < LAVA_DAMAGE_COOLDOWN_MS) {
             return;
         }
@@ -102,7 +103,7 @@ public class Player extends Circle {
     }
 
     public boolean takeDamage(int amount) {
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         if (now < iFrameUntilMs) {
             return false;
         }

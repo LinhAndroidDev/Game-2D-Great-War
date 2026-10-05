@@ -1,7 +1,6 @@
 package com.example.game2dgreatwar;
 
 import android.content.Context;
-import android.media.MediaPlayer;
 
 public class Utils {
 
@@ -18,10 +17,7 @@ public class Utils {
     }
 
     public static void addSound(Context context, int soundId) {
-        MediaPlayer mediaPlayer = MediaPlayer.create(context, soundId);
-        mediaPlayer.start();
-
-        mediaPlayer.setOnCompletionListener(MediaPlayer::release);
+        SoundManager.play(soundId);
     }
 
     // Check if circle and rectangle are colliding

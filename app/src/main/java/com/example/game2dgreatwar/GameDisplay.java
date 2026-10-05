@@ -15,6 +15,7 @@ public class GameDisplay {
     private double gameToDisplayCoordinatesOffsetY;
     private double gameCenterX;
     private double gameCenterY;
+    private final Rect gameRect = new Rect();
 
     public GameDisplay(int widthPixels, int heightPixels, GameObject centerObject) {
         this.widthPixels = widthPixels;
@@ -46,12 +47,13 @@ public class GameDisplay {
     }
 
     public Rect getGameRect() {
-        return new Rect(
+        gameRect.set(
                 (int) (gameCenterX - (double) widthPixels /2),
                 (int) (gameCenterY - (double) heightPixels /2),
                 (int) (gameCenterX + (double) widthPixels /2),
                 (int) (gameCenterY + (double) heightPixels /2)
         );
+        return gameRect;
     }
 
     public double getGameCenterX() {

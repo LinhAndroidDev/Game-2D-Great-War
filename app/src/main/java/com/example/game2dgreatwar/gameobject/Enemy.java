@@ -2,15 +2,16 @@ package com.example.game2dgreatwar.gameobject;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 
 import androidx.core.content.ContextCompat;
 
+import com.example.game2dgreatwar.GameClock;
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.GameLoop;
 import com.example.game2dgreatwar.R;
 import com.example.game2dgreatwar.gamepanel.EntityHealthBar;
+import com.example.game2dgreatwar.graphics.BitmapCache;
 import com.example.game2dgreatwar.map.MapLayout;
 import com.example.game2dgreatwar.map.TemporaryHazard;
 import com.example.game2dgreatwar.map.Tilemap;
@@ -80,15 +81,25 @@ public class Enemy extends Circle {
                 role == EnemyRole.BOSS ? 90 : 40
         );
 
-        int drawable = drawableForType(type);
-        Bitmap raw = BitmapFactory.decodeResource(context.getResources(), drawable);
-        int size = role == EnemyRole.BOSS ? NORMAL_BITMAP_SIZE * 5 : NORMAL_BITMAP_SIZE;
-        this.bitmap = Bitmap.createScaledBitmap(raw, size, size, true);
+        this.bitmap = BitmapCache.get(context, drawableForType(type), bitmapSizeFor(role));
 
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         this.lastBlinkToggleMs = now;
         this.lastAbilityMs = now;
         this.lastReflectWindowMs = now;
+    }
+
+    private static int bitmapSizeFor(EnemyRole role) {
+        return role == EnemyRole.BOSS ? NORMAL_BITMAP_SIZE * 5 : NORMAL_BITMAP_SIZE;
+    }
+
+    /** Decodes every enemy/boss image up front so spawning never decodes during gameplay. */
+    public static void preloadBitmaps(Context context) {
+        for (EnemyType type : EnemyType.values()) {
+            for (EnemyRole role : EnemyRole.values()) {
+                BitmapCache.get(context, drawableForType(type), bitmapSizeFor(role));
+            }
+        }
     }
 
     public static Enemy createNormal(Context context, Player player, EnemyType type) {
@@ -226,7 +237,7 @@ public class Enemy extends Circle {
         if (!isBoss() || type != EnemyType.BAT) {
             return false;
         }
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         if (now - lastReflectWindowMs >= ABILITY_INTERVAL_MS) {
             reflectReady = true;
             lastReflectWindowMs = now;
@@ -273,7 +284,7 @@ public class Enemy extends Circle {
             visible = true;
             return;
         }
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         if (now - lastBlinkToggleMs >= BLINK_INTERVAL_MS) {
             visible = !visible;
             lastBlinkToggleMs = now;
@@ -303,7 +314,7 @@ public class Enemy extends Circle {
         if (directions <= 0) {
             return shots;
         }
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         if (now - lastAbilityMs < ABILITY_INTERVAL_MS) {
             return shots;
         }
@@ -338,7 +349,7 @@ public class Enemy extends Circle {
             return null;
         }
 
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         if (now - lastAbilityMs < ABILITY_INTERVAL_MS) {
             return null;
         }

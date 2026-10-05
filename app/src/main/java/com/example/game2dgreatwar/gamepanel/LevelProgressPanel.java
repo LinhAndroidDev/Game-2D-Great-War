@@ -12,6 +12,8 @@ public class LevelProgressPanel {
     private final Paint barBgPaint = new Paint();
     private final Paint barFillPaint = new Paint();
     private final Paint bossPaint = new Paint();
+    private final RectF barRect = new RectF();
+    private final RectF fillRect = new RectF();
 
     public LevelProgressPanel() {
         textPaint.setColor(Color.WHITE);
@@ -33,7 +35,7 @@ public class LevelProgressPanel {
         String title = "Level " + levelController.getLevel();
         canvas.drawText(title, left, top, textPaint);
 
-        RectF barRect = new RectF(left, top + 16f, left + barWidth, top + 16f + barHeight);
+        barRect.set(left, top + 16f, left + barWidth, top + 16f + barHeight);
         canvas.drawRoundRect(barRect, 8f, 8f, barBgPaint);
 
         if (levelController.isBossFight()) {
@@ -41,13 +43,13 @@ public class LevelProgressPanel {
             canvas.drawText("BOSS", left + 80f, top + 38f, textPaint);
         } else {
             float progress = levelController.getProgressRatio();
-            RectF fill = new RectF(
+            fillRect.set(
                     barRect.left,
                     barRect.top,
                     barRect.left + barWidth * progress,
                     barRect.bottom
             );
-            canvas.drawRoundRect(fill, 8f, 8f, barFillPaint);
+            canvas.drawRoundRect(fillRect, 8f, 8f, barFillPaint);
             String label = levelController.getKills() + "/" + levelController.getKillThreshold();
             canvas.drawText(label, left + 70f, top + 38f, textPaint);
         }

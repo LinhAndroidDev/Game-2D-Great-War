@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 
+import com.example.game2dgreatwar.GameClock;
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.graphics.SpriteSheet;
 import com.example.game2dgreatwar.map.Tile.TileType;
@@ -152,7 +153,7 @@ public class Tilemap {
     }
 
     public void updateTemporaryHazards() {
-        long now = System.currentTimeMillis();
+        long now = GameClock.nowMs();
         Iterator<TemporaryHazard> iterator = temporaryHazards.iterator();
         while (iterator.hasNext()) {
             if (iterator.next().isExpired(now)) {

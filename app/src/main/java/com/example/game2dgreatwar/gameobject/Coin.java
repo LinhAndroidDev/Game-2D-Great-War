@@ -2,11 +2,11 @@ package com.example.game2dgreatwar.gameobject;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.R;
+import com.example.game2dgreatwar.graphics.BitmapCache;
 
 import java.util.Random;
 
@@ -14,16 +14,22 @@ public class Coin {
     private double positionX;
     private double positionY;
     private Bitmap bitmap;
-    private final double radius = 50; // Bán kính của Health
+    private static final int[] RES_IDS = { R.drawable.ic_coin, R.drawable.ic_coin_funny };
+    private static final int BITMAP_SIZE = 50;
+    private final double radius = BITMAP_SIZE; // Bán kính của Coin
 
     // Constructor có thêm resourceId để load ảnh Bitmap
     public Coin(Context context, double positionX, double positionY) {
         this.positionX = positionX;
         this.positionY = positionY;
-        int[] resArray = { R.drawable.ic_coin, R.drawable.ic_coin_funny};
-        int randomResId = resArray[new Random().nextInt(2)];
-        this.bitmap = BitmapFactory.decodeResource(context.getResources(), randomResId);
-        this.bitmap = Bitmap.createScaledBitmap(this.bitmap, (int) radius, (int) radius, true);
+        int randomResId = RES_IDS[new Random().nextInt(RES_IDS.length)];
+        this.bitmap = BitmapCache.get(context, randomResId, BITMAP_SIZE);
+    }
+
+    public static void preloadBitmaps(Context context) {
+        for (int resId : RES_IDS) {
+            BitmapCache.get(context, resId, BITMAP_SIZE);
+        }
     }
 
     // Getter và Setter

@@ -2,24 +2,28 @@ package com.example.game2dgreatwar.gameobject;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 
 import com.example.game2dgreatwar.GameDisplay;
 import com.example.game2dgreatwar.R;
+import com.example.game2dgreatwar.graphics.BitmapCache;
 
 public class Health {
     private double positionX;
     private double positionY;
     private Bitmap bitmap;
-    private final double radius = 50; // Bán kính của Health
+    private static final int BITMAP_SIZE = 50;
+    private final double radius = BITMAP_SIZE; // Bán kính của Health
 
     // Constructor có thêm resourceId để load ảnh Bitmap
     public Health(Context context, double positionX, double positionY) {
         this.positionX = positionX;
         this.positionY = positionY;
-        this.bitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.ic_health);
-        this.bitmap = Bitmap.createScaledBitmap(this.bitmap, (int) radius, (int) radius, true);
+        this.bitmap = BitmapCache.get(context, R.drawable.ic_health, BITMAP_SIZE);
+    }
+
+    public static void preloadBitmaps(Context context) {
+        BitmapCache.get(context, R.drawable.ic_health, BITMAP_SIZE);
     }
 
     // Getter và Setter

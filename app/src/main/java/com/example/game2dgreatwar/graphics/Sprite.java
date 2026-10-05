@@ -7,6 +7,8 @@ public class Sprite {
 
     private final SpriteSheet spriteSheet;
     private final Rect rect;
+    // Reused for every draw call to avoid allocating a Rect per sprite per frame
+    private final Rect destinationRect = new Rect();
 
     public Sprite(SpriteSheet spriteSheet, Rect rect) {
         this.spriteSheet = spriteSheet;
@@ -14,10 +16,11 @@ public class Sprite {
     }
 
     public void draw(Canvas canvas, int x, int y) {
+        destinationRect.set(x, y, x + getWidth(), y + getHeight());
         canvas.drawBitmap(
             spriteSheet.getBitmap(),
                 rect,
-                new Rect(x, y, x+getWidth(), y+getHeight()),
+                destinationRect,
                 null
         );
     }
