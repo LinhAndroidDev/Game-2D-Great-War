@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -45,10 +46,14 @@ import java.util.List;
 public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     private static final double BOSS_PLAYER_OFFSET = 280;
+    // Holding the aim stick fires one spell every this many updates (60 UPS / 15 = 4 shots/s)
+    private static final int FIRE_INTERVAL_UPDATES = 15;
+    // The aim stick must be pushed at least this far before it fires, so a resting thumb doesn't
+    private static final double AIM_DEADZONE = 0.25;
 
     private final Tilemap tilemap;
-    private int joystickPointerId = 0;
     private final Joystick joystick;
+    private final Joystick aimJoystick;
     private final Player player;
     private GameLoop gameLoop;
     private final List<Enemy> enemyList = new ArrayList<>();
@@ -56,7 +61,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     private final List<EnemyProjectile> enemyProjectileList = new ArrayList<>();
     private final List<Health> healthList = new ArrayList<>();
     private final List<Coin> coinList = new ArrayList<>();
-    private int numberOfSpellsToCast = 0;
+    private int updatesUntilNextShot = 0;
     private final Performance performance;
     private final LevelProgressPanel levelProgressPanel = new LevelProgressPanel();
     private final LevelController levelController = new LevelController();
@@ -124,8 +129,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         ((Activity) getContext()).getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         screenWidthPixels = displayMetrics.widthPixels;
 
-        joystick = new Joystick(0, 0, 1, 1);
+        joystick = new Joystick(false, Color.BLUE);
         joystick.layoutForScreen(displayMetrics.widthPixels, displayMetrics.heightPixels);
+        aimJoystick = new Joystick(true, Color.RED);
+        aimJoystick.layoutForScreen(displayMetrics.widthPixels, displayMetrics.heightPixels);
 
         SpriteSheet spriteSheet = new SpriteSheet(context);
         tilemap = new Tilemap(spriteSheet);
@@ -151,31 +158,30 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         if (isPaused) {
             return true;
         }
+        // Each finger is tracked by id, so moving and aiming work at the same time
+        int actionIndex = event.getActionIndex();
+        int pointerId = event.getPointerId(actionIndex);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                if (joystick.getIsPressed()) {
-                    numberOfSpellsToCast++;
-                    Utils.addSound(getContext(), R.raw.sound_shoot);
-                } else if (joystick.isPressed(event.getX(), event.getY())) {
-                    joystickPointerId = event.getPointerId(event.getActionIndex());
-                    joystick.setIsPressed(true);
-                } else {
-                    numberOfSpellsToCast++;
-                    Utils.addSound(getContext(), R.raw.sound_shoot);
+                float x = event.getX(actionIndex);
+                float y = event.getY(actionIndex);
+                if (!joystick.tryPress(pointerId, x, y)) {
+                    aimJoystick.tryPress(pointerId, x, y);
                 }
                 return true;
             case MotionEvent.ACTION_MOVE:
-                if (joystick.getIsPressed()) {
-                    joystick.setActuator(event.getX(), event.getY());
-                }
+                joystick.handleMove(event);
+                aimJoystick.handleMove(event);
                 return true;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
-                if (joystickPointerId == event.getPointerId(event.getActionIndex())) {
-                    joystick.setIsPressed(false);
-                    joystick.resetActuator();
-                }
+                joystick.release(pointerId);
+                aimJoystick.release(pointerId);
+                return true;
+            case MotionEvent.ACTION_CANCEL:
+                joystick.releaseAll();
+                aimJoystick.releaseAll();
                 return true;
         }
         return super.onTouchEvent(event);
@@ -194,6 +200,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         Log.d("Game.java", "surfaceChanged()");
         screenWidthPixels = width;
         joystick.layoutForScreen(width, height);
+        aimJoystick.layoutForScreen(width, height);
     }
 
     @Override
@@ -230,6 +237,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         joystick.draw(canvas);
+        aimJoystick.draw(canvas);
         performance.draw(canvas, gameLoop);
         levelProgressPanel.draw(canvas, levelController, screenWidthPixels);
     }
@@ -256,6 +264,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
 
         joystick.update();
+        aimJoystick.update();
         player.update();
         tilemap.updateTemporaryHazards();
 
@@ -272,10 +281,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
             handleEnemyAbilities(enemy);
         }
 
-        while (numberOfSpellsToCast > 0) {
-            spellList.add(new Spell(getContext(), player));
-            numberOfSpellsToCast--;
-        }
+        fireWhileAiming();
         for (Spell spell : spellList) {
             spell.update();
         }
@@ -286,6 +292,26 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         collectPickups();
 
         gameDisplay.update();
+    }
+
+    private void fireWhileAiming() {
+        if (updatesUntilNextShot > 0) {
+            updatesUntilNextShot--;
+        }
+        if (!aimJoystick.getIsPressed() || aimJoystick.getMagnitude() < AIM_DEADZONE) {
+            return;
+        }
+        if (updatesUntilNextShot > 0) {
+            return;
+        }
+        spellList.add(new Spell(
+                getContext(),
+                player,
+                aimJoystick.getActuatorX(),
+                aimJoystick.getActuatorY()
+        ));
+        Utils.addSound(getContext(), R.raw.sound_shoot);
+        updatesUntilNextShot = FIRE_INTERVAL_UPDATES;
     }
 
     private void handleEnemyAbilities(Enemy enemy) {
@@ -531,9 +557,8 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         }
         isPaused = true;
         // Drop held input so the player doesn't keep running/shooting after resume
-        joystick.setIsPressed(false);
-        joystick.resetActuator();
-        numberOfSpellsToCast = 0;
+        joystick.releaseAll();
+        aimJoystick.releaseAll();
         notifyPauseChanged();
     }
 
@@ -568,7 +593,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         healthList.clear();
         coinList.clear();
         tilemap.clearTemporaryHazards();
-        numberOfSpellsToCast = 0;
+        updatesUntilNextShot = 0;
         awardKillCounter = 0;
         isGameOver = false;
         levelController.startAtLevel(level);
@@ -678,7 +703,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
             awardKillCounter = restoredAwardKillCounter;
             Enemy.restoreSpawnTimer(spawnTimer);
-            numberOfSpellsToCast = 0;
+            updatesUntilNextShot = 0;
             isGameOver = false;
             gameDisplay.update();
             pause();

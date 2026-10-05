@@ -14,7 +14,8 @@ public class Spell extends Circle {
     public static final double SPEED_PIXELS_PER_SECOND = 1200.0;
     private static final double MAX_SPEED = SPEED_PIXELS_PER_SECOND / GameLoop.MAX_UPS;
 
-    public Spell(Context context, Player spellcaster) {
+    /** Fires from the spellcaster towards the given direction (does not need to be normalized). */
+    public Spell(Context context, Player spellcaster, double directionX, double directionY) {
         super(
             context,
             ContextCompat.getColor(context, R.color.spell),
@@ -22,8 +23,14 @@ public class Spell extends Circle {
             spellcaster.getPositionY(),
       25
         );
-        velocityX = spellcaster.getDirectionX()*MAX_SPEED;
-        velocityY = spellcaster.getDirectionY()*MAX_SPEED;
+        double length = Math.sqrt(directionX * directionX + directionY * directionY);
+        if (length == 0) {
+            directionX = spellcaster.getDirectionX();
+            directionY = spellcaster.getDirectionY();
+            length = 1;
+        }
+        velocityX = directionX / length * MAX_SPEED;
+        velocityY = directionY / length * MAX_SPEED;
     }
 
     private Spell(Context context, double positionX, double positionY, double velocityX, double velocityY) {
