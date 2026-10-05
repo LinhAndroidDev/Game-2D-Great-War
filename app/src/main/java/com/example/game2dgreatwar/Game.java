@@ -61,6 +61,7 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     GameOverListener gameOverListener;
     VictoryListener victoryListener;
+    LevelChangedListener levelChangedListener;
     private boolean isGameOver = false;
     private int awardKillCounter = 0;
 
@@ -94,6 +95,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
     interface VictoryListener {
         void onVictory();
+    }
+
+    interface LevelChangedListener {
+        void onLevelChanged(int level);
     }
 
     public Game(Context context, AttributeSet attrs) {
@@ -474,6 +479,9 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
 
         awardKillCounter = 0;
         Enemy.resetSpawnTimer();
+        if (levelChangedListener != null) {
+            levelChangedListener.onLevelChanged(levelController.getLevel());
+        }
     }
 
     private void collectPickups() {
@@ -500,6 +508,10 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
     }
 
     public void resetGame() {
+        startAtLevel(1);
+    }
+
+    public void startAtLevel(int level) {
         player.healFull();
         player.setPositionSafe(MapLayout.PLAYER_SPAWN_X, MapLayout.PLAYER_SPAWN_Y);
         enemyList.clear();
@@ -511,9 +523,13 @@ public class Game extends SurfaceView implements SurfaceHolder.Callback {
         numberOfSpellsToCast = 0;
         awardKillCounter = 0;
         isGameOver = false;
-        levelController.reset();
+        levelController.startAtLevel(level);
         Enemy.resetSpawnTimer();
         gameDisplay.update();
+    }
+
+    public int getCurrentLevel() {
+        return levelController.getLevel();
     }
 
     private boolean isSpellOutOfBounds(Spell spell) {

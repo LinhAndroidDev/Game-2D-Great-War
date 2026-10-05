@@ -125,7 +125,11 @@ public class LevelController {
     }
 
     public void reset() {
-        level = 1;
+        startAtLevel(1);
+    }
+
+    public void startAtLevel(int targetLevel) {
+        level = Math.max(1, Math.min(MAX_LEVEL, targetLevel));
         kills = 0;
         bossFight = false;
         victory = false;

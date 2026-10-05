@@ -131,7 +131,7 @@ public class Enemy extends Circle {
             return 0.75;
         }
         if (type == EnemyType.BAT) {
-            return 1.2;
+            return 1.1;
         }
         return 1.0;
     }
